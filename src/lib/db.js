@@ -138,7 +138,7 @@ export const candidatesApi = {
   async list() {
     if (!isSupabaseConfigured) return mockAdapter.listCandidates();
     const { data, error } = await supabase
-      .from("interview_candidates")
+      .from("kandidat_pool")
       .select("*")
       .order("updated_at", { ascending: false });
     if (error) throw error;
@@ -147,9 +147,9 @@ export const candidatesApi = {
   async history(candidateId) {
     if (!isSupabaseConfigured) return mockAdapter.listCandidateHistory(candidateId);
     const { data, error } = await supabase
-      .from("interview_candidate_history")
+      .from("kandidat_pool_history")
       .select("*, turnover:turnover(*)")
-      .eq("candidate_id", candidateId)
+      .eq("kandidat_pool_id", candidateId)
       .order("created_at", { ascending: false });
     if (error) throw error;
     return data;
