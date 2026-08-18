@@ -27,9 +27,9 @@ const emptyForm = {
   // Nama-nama pada blok tanda tangan: terisi otomatis begitu form dibuka,
   // tapi tetap bisa diketik ulang/diganti oleh OPS sebelum disimpan.
   pemohon_nama: "",
-  disetujui_1_nama: ERS_DISETUJUI_1_DEFAULT,
-  disetujui_2_nama: "",
-  diterima_nama: ERS_DITERIMA_DEFAULT,
+  disetujui_1: ERS_DISETUJUI_1_DEFAULT,
+  disetujui_2: "",
+  diterima_oleh: ERS_DITERIMA_DEFAULT,
 };
 
 export default function ErsForm() {
@@ -175,18 +175,18 @@ export default function ErsForm() {
                 <TextInput value={form.pemohon_nama} onChange={(e) => set("pemohon_nama", e.target.value)} required />
               </Field>
               <Field label="Disetujui 1 (Division Head)">
-                <TextInput value={form.disetujui_1_nama} onChange={(e) => set("disetujui_1_nama", e.target.value)} required />
+                <TextInput value={form.disetujui_1} onChange={(e) => set("disetujui_1", e.target.value)} required />
               </Field>
               <Field label="Disetujui 2 (Director)">
                 <TextInput
-                  value={form.disetujui_2_nama}
-                  onChange={(e) => set("disetujui_2_nama", e.target.value)}
+                  value={form.disetujui_2}
+                  onChange={(e) => set("disetujui_2", e.target.value)}
                   placeholder="Nama yang menyetujui ke-2"
                   required
                 />
               </Field>
               <Field label="Diterima Oleh (HR Division Head)">
-                <TextInput value={form.diterima_nama} onChange={(e) => set("diterima_nama", e.target.value)} required />
+                <TextInput value={form.diterima_oleh} onChange={(e) => set("diterima_oleh", e.target.value)} required />
               </Field>
             </div>
           </div>

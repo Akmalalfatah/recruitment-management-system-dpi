@@ -248,9 +248,9 @@ export async function exportErsPdf(record) {
   // Mengambil 100% data persis dari kode yang Anda tempelkan
   const sigCols = [
     { title: "PEMOHON", role: "OPS / RO", name: record.pemohon_nama, ts: formatTimestamp(record.submitted_at) },
-    { title: "DISETUJUI- 1", role: "DIVISION HEAD", name: record.disetujui_1_nama || "", ts: "" },
-    { title: "DISETUJUI- 2", role: "DIRECTOR", name: record.disetujui_2_nama || "", ts: "" },
-    { title: "DITERIMA", role: "HR DIVISION HEAD", name: record.diterima_nama || "", ts: "" },
+    { title: "DISETUJUI- 1", role: "DIVISION HEAD", name: record.disetujui_1 || "", ts: "" },
+    { title: "DISETUJUI- 2", role: "DIRECTOR", name: record.disetujui_2 || "", ts: "" },
+    { title: "DITERIMA", role: "HR DIVISION HEAD", name: record.diterima_oleh || "", ts: "" },
   ];
 
   sigCols.forEach((c, i) => {

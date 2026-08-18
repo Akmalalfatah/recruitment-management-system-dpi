@@ -40,7 +40,7 @@ function seed() {
       status_karyawan: "Lajang", usia: "MAX. 30 TAHUN", tanggal_aktif_diminta: todayMinus(-3),
       kualifikasi: "SESUAI JOB DESCRIPTIONS", bahasa: "-", keahlian: "-", sertifikat: "-",
       uploaded_by: "u_ops", pemohon_nama: "Michelle Citra Amanda Setiawan",
-      disetujui_1_nama: ERS_DISETUJUI_1_DEFAULT, disetujui_2_nama: "SANTOSO WIBOWO", diterima_nama: ERS_DITERIMA_DEFAULT,
+      disetujui_1: ERS_DISETUJUI_1_DEFAULT, disetujui_2: "SANTOSO WIBOWO", diterima_oleh: ERS_DITERIMA_DEFAULT,
       status: "Pending", created_at: todayMinus(2), submitted_at: `${todayMinus(2)}T09:14:22.000Z`,
     },
     {
@@ -51,7 +51,7 @@ function seed() {
       status_karyawan: "Menikah", usia: "MAX. 28 TAHUN", tanggal_aktif_diminta: todayMinus(-1),
       kualifikasi: "SESUAI JOB DESCRIPTIONS", bahasa: "-", keahlian: "-", sertifikat: "-",
       uploaded_by: "u_ops", pemohon_nama: "Michelle Citra Amanda Setiawan",
-      disetujui_1_nama: ERS_DISETUJUI_1_DEFAULT, disetujui_2_nama: "SANTOSO WIBOWO", diterima_nama: ERS_DITERIMA_DEFAULT,
+      disetujui_1: ERS_DISETUJUI_1_DEFAULT, disetujui_2: "SANTOSO WIBOWO", diterima_oleh: ERS_DITERIMA_DEFAULT,
       status: "Accepted", created_at: todayMinus(6), submitted_at: `${todayMinus(6)}T11:02:47.000Z`,
     },
     {
@@ -62,7 +62,7 @@ function seed() {
       status_karyawan: "Lajang", usia: "MAX. 35 TAHUN", tanggal_aktif_diminta: todayMinus(-5),
       kualifikasi: "SESUAI JOB DESCRIPTIONS", bahasa: "-", keahlian: "TEKNISI HVAC", sertifikat: "-",
       uploaded_by: "u_ops", pemohon_nama: "Michelle Citra Amanda Setiawan",
-      disetujui_1_nama: ERS_DISETUJUI_1_DEFAULT, disetujui_2_nama: "SANTOSO WIBOWO", diterima_nama: ERS_DITERIMA_DEFAULT,
+      disetujui_1: ERS_DISETUJUI_1_DEFAULT, disetujui_2: "SANTOSO WIBOWO", diterima_oleh: ERS_DITERIMA_DEFAULT,
       status: "Rejected", created_at: todayMinus(10), submitted_at: `${todayMinus(10)}T14:38:05.000Z`,
     },
   ];
@@ -236,8 +236,8 @@ export const mockAdapter = {
       id: uid("ers"),
       nomor_ers,
       divisi,
-      disetujui_1_nama: ERS_DISETUJUI_1_DEFAULT,
-      diterima_nama: ERS_DITERIMA_DEFAULT,
+      disetujui_1: ERS_DISETUJUI_1_DEFAULT,
+      diterima_oleh: ERS_DITERIMA_DEFAULT,
       status: "Pending",
       created_at: now.toISOString().slice(0, 10), // dipakai untuk filter tanggal
       submitted_at: now.toISOString(), // timestamp lengkap, dipakai di kolom "Pemohon" pada PDF
