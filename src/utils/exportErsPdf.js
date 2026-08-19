@@ -79,6 +79,19 @@ function putText(doc, str, x, y, { size = 8, bold = false, align = "left", color
   doc.text(str === null || str === undefined || str === "" ? "-" : String(str), x, y, { align });
 }
 
+function getWrappedLineCount(doc, value, width, size = 8.5) {
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(size);
+  const raw = value === undefined || value === null || value === "" ? "-" : String(value);
+  return doc.splitTextToSize(raw, width).length;
+}
+
+function getRequirementCellHeight(doc, value, valueW, minimumH) {
+  const lineH = 8.5 + 2.5;
+  const lineCount = getWrappedLineCount(doc, value, valueW - 12);
+  return Math.max(minimumH, lineCount * lineH + 12);
+}
+
 // A "label | value" pair drawn as two bordered, vertically-centered, plain
 // white cells side by side -- the recurring building block of the form.
 function labelValueCell(doc, x, y, labelW, valueW, h, label, value, opts = {}) {
@@ -216,24 +229,30 @@ export async function exportErsPdf(record) {
   row2(40, "NAMA KARYAWAN YANG DIGANTI / DIKURANGI", record.nama_karyawan_existing, "LOKASI PENEMPATAN KERJA", record.area_penempatan);
 
   // ---------------- PERSYARATAN JABATAN ----------------
-  const blockH = 96;
-  const leftRowH = blockH / 3; 
-  const rightHalfRowH = leftRowH / 2; 
+  const requirementHeaderH = 32;
+  const requirementRowH = 32;
+  const qualificationH = getRequirementCellHeight(doc, record.kualifikasi, colValueW, requirementRowH / 2);
+  const languageH = getRequirementCellHeight(doc, record.bahasa, colValueW, requirementRowH / 2);
+  const qualificationRowH = qualificationH + languageH;
+  const skillH = getRequirementCellHeight(doc, record.keahlian, colValueW, requirementRowH / 2);
+  const certificateH = getRequirementCellHeight(doc, record.sertifikat, colValueW, requirementRowH / 2);
+  const skillRowH = skillH + certificateH;
+  const blockH = requirementHeaderH + qualificationRowH + skillRowH;
 
   // Baris 1: Usia | Persyaratan Jabatan (Header)
-  labelValueCell(doc, x0, y, colLabelW, colValueW, leftRowH, "USIA", record.usia);
-  box(doc, col2X, y, colLabelW + colValueW, leftRowH);
+  labelValueCell(doc, x0, y, colLabelW, colValueW, requirementHeaderH, "USIA", record.usia);
+  box(doc, col2X, y, colLabelW + colValueW, requirementHeaderH);
   putText(doc, "PERSYARATAN JABATAN", col2X + (colLabelW + colValueW) / 2, y + 18, { align: "center", size: 9, bold: true });
 
   // Baris 2: Status | Kualifikasi (Atas) & Bahasa (Bawah)
-  labelValueCell(doc, x0, y + leftRowH, colLabelW, colValueW, leftRowH, "STATUS", record.status_karyawan);
-  labelValueCell(doc, col2X, y + leftRowH, colLabelW, colValueW, rightHalfRowH, "KUALIFIKASI", record.kualifikasi);
-  labelValueCell(doc, col2X, y + leftRowH + rightHalfRowH, colLabelW, colValueW, rightHalfRowH, "BAHASA", record.bahasa);
+  labelValueCell(doc, x0, y + requirementHeaderH, colLabelW, colValueW, qualificationRowH, "STATUS", record.status_karyawan);
+  labelValueCell(doc, col2X, y + requirementHeaderH, colLabelW, colValueW, qualificationH, "KUALIFIKASI", record.kualifikasi);
+  labelValueCell(doc, col2X, y + requirementHeaderH + qualificationH, colLabelW, colValueW, languageH, "BAHASA", record.bahasa);
 
   // Baris 3: Tanggal Aktif | Keahlian (Atas) & Sertifikat (Bawah)
-  labelValueCell(doc, x0, y + leftRowH * 2, colLabelW, colValueW, leftRowH, "TANGGAL AKTIF YANG DIMINTA", formatDMY(record.tanggal_aktif_diminta));
-  labelValueCell(doc, col2X, y + leftRowH * 2, colLabelW, colValueW, rightHalfRowH, "KEAHLIAN", record.keahlian);
-  labelValueCell(doc, col2X, y + leftRowH * 2 + rightHalfRowH, colLabelW, colValueW, rightHalfRowH, "SERTIFIKAT", record.sertifikat);
+  labelValueCell(doc, x0, y + requirementHeaderH + qualificationRowH, colLabelW, colValueW, skillRowH, "TANGGAL AKTIF YANG DIMINTA", formatDMY(record.tanggal_aktif_diminta));
+  labelValueCell(doc, col2X, y + requirementHeaderH + qualificationRowH, colLabelW, colValueW, skillH, "KEAHLIAN", record.keahlian);
+  labelValueCell(doc, col2X, y + requirementHeaderH + qualificationRowH + skillH, colLabelW, colValueW, certificateH, "SERTIFIKAT", record.sertifikat);
 
   y += blockH;
 
