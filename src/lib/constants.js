@@ -51,6 +51,8 @@ export const STATUS_BADGE_STYLE = {
   Completed: "bg-status-green",
   Hired: "bg-status-green",
   "Not Hired": "bg-status-red",
+  Hold: "bg-status-blue",
+  "Belum Hired": "bg-ink-300",
   "-": "bg-ink-300",
 };
 

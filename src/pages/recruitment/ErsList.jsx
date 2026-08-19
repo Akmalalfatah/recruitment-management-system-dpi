@@ -78,7 +78,7 @@ export default function RecruitmentErsList() {
     <div>
       <PageHeader
         title="Recruitment - Review ERS"
-        subtitle="Terima atau tolak pengajuan ERS dari Operasional. Turnover baru hanya bisa dibuat OPS setelah ERS terkait Accepted."
+        subtitle="Terima atau tolak pengajuan ERS dari Operasional. Turnover dibuat otomatis begitu ERS di-Accept."
       />
       <Card className="p-4">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-3">

@@ -86,7 +86,7 @@ function RecruitmentDashboard({ data }) {
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <StatCard label="ERS Menunggu Review" value={pending(data.ers)} accent="secondary" />
-        <StatCard label="Kuota Turnover Aktif" value={data.turnover.filter((t) => t.status === "Accepted" && !t.nama_karyawan_baru).length} />
+        <StatCard label="Turnover Masih Proses" value={data.turnover.filter((t) => t.status === "Pending").length} />
         <StatCard label="Interview Harian" value={data.interviews.length} accent="secondary" />
         <StatCard label="Kandidat Direkomendasikan" value={data.interviews.filter((i) => i.hasil_interview === "Recommended").length} accent="green" />
         <StatCard label="Interview Hari Ini" value={todayInterviews.length} accent="blue" />

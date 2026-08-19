@@ -9,7 +9,6 @@ import Dashboard from "./pages/dashboard/Dashboard";
 import ErsList from "./pages/ops/ErsList";
 import ErsForm from "./pages/ops/ErsForm";
 import OpsTurnoverList from "./pages/ops/TurnoverList";
-import OpsTurnoverForm from "./pages/ops/TurnoverForm";
 
 import ErTurnoverList from "./pages/er/TurnoverList";
 
@@ -44,7 +43,6 @@ export default function App() {
             <Route path="/ops/ers" element={<ErsList />} />
             <Route path="/ops/ers/new" element={<ErsForm />} />
             <Route path="/ops/turnover" element={<OpsTurnoverList />} />
-            <Route path="/ops/turnover/new" element={<OpsTurnoverForm />} />
 
             {/* Employee Relation */}
             <Route path="/er/turnover" element={<ErTurnoverList />} />

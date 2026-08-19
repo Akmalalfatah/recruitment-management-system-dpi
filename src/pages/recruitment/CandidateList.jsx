@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { Users2, Download, Info, History } from "lucide-react";
-import { candidatesApi } from "../../lib/db";
+import { Users2, Download, Info } from "lucide-react";
+import { interviewApi } from "../../lib/db";
 import { PageHeader, Card, ActionIconButton } from "../../components/common/Ui";
 import DataTable from "../../components/common/DataTable";
 import StatusBadge from "../../components/common/StatusBadge";
@@ -8,17 +8,18 @@ import Modal from "../../components/common/Modal";
 import { exportToExcel } from "../../utils/exportExcel";
 import { formatDate } from "../../utils/formatDate";
 
+// "Data Peserta Wawancara" is no longer a separate archive table -- it's
+// just interview_harian rows with kandidat_status = 'Hold', whether or not
+// they're currently assigned to a turnover or already hired there.
 export default function CandidateList() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState(null);
-  const [history, setHistory] = useState([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
-    candidatesApi
-      .list()
+    interviewApi
+      .listHold()
       .then(setRows)
       .finally(() => setLoading(false));
   }, []);
@@ -27,32 +28,30 @@ export default function CandidateList() {
     load();
   }, [load]);
 
-  async function openDetail(row) {
-    setActive(row);
-    setHistoryLoading(true);
-    try {
-      const h = await candidatesApi.history(row.id);
-      setHistory(h);
-    } finally {
-      setHistoryLoading(false);
-    }
-  }
-
   const totalNilai = (r) =>
     (r.komunikasi || 0) + (r.penampilan || 0) + (r.pengetahuan_pekerjaan || 0) + (r.keterampilan || 0) + (r.pengalaman_kerja || 0);
 
   const columns = [
     { key: "nama_kandidat", header: "Nama" },
-    { key: "posisi_terakhir_dilamar", header: "Posisi Terakhir Dilamar" },
+    { key: "posisi_yang_dilamar", header: "Posisi Dilamar" },
     { key: "domisili", header: "Domisili" },
     { key: "no_hp", header: "No. HP" },
-    { key: "hasil_interview", header: "Hasil Interview Terakhir", render: (r) => <StatusBadge status={r.hasil_interview || "-"} /> },
+    { key: "hasil_interview", header: "Hasil Interview", render: (r) => <StatusBadge status={r.hasil_interview || "-"} /> },
     { key: "total_nilai", header: "Total Nilai", render: (r) => totalNilai(r) },
-    { key: "updated_at", header: "Terakhir Diupdate", render: (r) => formatDate(r.updated_at) },
+    {
+      key: "turnover",
+      header: "Turnover Diajukan",
+      render: (r) => r.turnover?.nomor_turnover || <span className="text-ink-300">Belum diajukan</span>,
+    },
+    {
+      key: "hire_status",
+      header: "Status Hired",
+      render: (r) => <StatusBadge status={r.hire_status && r.hire_status !== "-" ? r.hire_status : "Belum Hired"} />,
+    },
     {
       key: "aksi",
       header: "Aksi",
-      render: (r) => <ActionIconButton icon={Info} onClick={() => openDetail(r)} variant="info" title="Lihat detail & riwayat" />,
+      render: (r) => <ActionIconButton icon={Info} onClick={() => setActive(r)} variant="info" title="Lihat detail" />,
     },
   ];
 
@@ -60,7 +59,7 @@ export default function CandidateList() {
     <div>
       <PageHeader
         title="Recruitment - Data Peserta Wawancara"
-        subtitle="Kumpulan data pribadi, nilai, dan hasil peserta yang pernah diwawancara namun belum/tidak hired — bisa dipertimbangkan lagi untuk turnover dengan jabatan serupa."
+        subtitle="Kumpulan data pribadi, nilai, dan hasil peserta yang disimpan (Hold) — bisa diajukan ke turnover mana pun dari layar Turnover, termasuk yang sudah hired."
       />
       <Card className="p-4">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
@@ -68,7 +67,7 @@ export default function CandidateList() {
             <Users2 size={16} className="text-primary" /> Daftar Peserta Wawancara
           </div>
           <button
-            onClick={() => exportToExcel(rows, "Data_Peserta_Wawancara")}
+            onClick={() => exportToExcel(rows.map((r) => ({ ...r, turnover: undefined })), "Data_Peserta_Wawancara")}
             className="flex items-center gap-1.5 text-xs font-semibold text-primary border border-primary/30 bg-primary/5 hover:bg-primary/10 px-3 py-1.5 "
           >
             <Download size={13} /> Ekspor Excel
@@ -77,11 +76,7 @@ export default function CandidateList() {
         {loading ? (
           <p className="text-sm text-ink-500 py-6 text-center">Memuat data...</p>
         ) : (
-          <DataTable
-            columns={columns}
-            rows={rows}
-            emptyLabel="Belum ada peserta yang ditandai Not Hired."
-          />
+          <DataTable columns={columns} rows={rows} emptyLabel="Belum ada peserta yang disimpan (Hold)." />
         )}
       </Card>
 
@@ -91,9 +86,12 @@ export default function CandidateList() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-bold text-ink-900">{active.nama_kandidat}</p>
-                <p className="text-xs text-ink-500">{active.posisi_terakhir_dilamar || "-"}</p>
+                <p className="text-xs text-ink-500">{active.posisi_yang_dilamar || "-"}</p>
               </div>
-              <StatusBadge status={active.hasil_interview || "-"} />
+              <div className="flex items-center gap-2">
+                <StatusBadge status={active.hasil_interview || "-"} />
+                <StatusBadge status={active.hire_status && active.hire_status !== "-" ? active.hire_status : "Belum Hired"} />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <DetailField label="No. HP" value={active.no_hp} />
@@ -105,38 +103,12 @@ export default function CandidateList() {
               <DetailField label="Info Lowongan" value={active.info_loker} />
               <DetailField label="Referensi" value={active.keterangan_referensi} />
               <DetailField label="Total Nilai" value={totalNilai(active)} />
+              <DetailField label="Tanggal Interview" value={formatDate(active.tanggal_interview)} />
+              <DetailField label="Turnover Diajukan" value={active.turnover?.nomor_turnover} />
             </div>
             <div>
-              <p className="text-[11px] font-medium text-ink-500 uppercase mb-1">Keterangan Interview Terakhir</p>
+              <p className="text-[11px] font-medium text-ink-500 uppercase mb-1">Keterangan Interview</p>
               <p className="text-ink-900">{active.keterangan_interview || "-"}</p>
-            </div>
-
-            <div className="pt-4 border-t border-surface-border">
-              <p className="flex items-center gap-1.5 text-xs font-semibold text-ink-700 uppercase tracking-wide mb-3">
-                <History size={13} /> Riwayat Diseleksi di Turnover
-              </p>
-              {historyLoading ? (
-                <p className="text-xs text-ink-500">Memuat riwayat...</p>
-              ) : history.length === 0 ? (
-                <p className="text-xs text-ink-500">Belum ada riwayat.</p>
-              ) : (
-                <div className="space-y-2">
-                  {history.map((h) => (
-                    <div key={h.id} className="border border-surface-border px-3 py-2 flex items-center justify-between gap-3 flex-wrap">
-                      <div>
-                        <p className="text-xs font-semibold text-ink-900">
-                          {h.turnover?.nomor_turnover || "-"} — {h.posisi_yang_dilamar || "-"}
-                        </p>
-                        <p className="text-[11px] text-ink-500">{formatDate(h.tanggal_interview)}</p>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <StatusBadge status={h.hasil_interview || "-"} />
-                        <StatusBadge status={h.hire_status || "-"} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
         )}

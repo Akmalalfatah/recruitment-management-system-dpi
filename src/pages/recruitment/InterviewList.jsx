@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Users, Download, Plus, Pencil, UserCheck, UserX, CheckCircle2, Save, Info } from "lucide-react";
-import { interviewApi, idCardApi } from "../../lib/db";
+import { Users, Download, Plus, Pencil, Save, Info, Archive, Trash2 } from "lucide-react";
+import { interviewApi } from "../../lib/db";
 import { PageHeader, Card, PrimaryButton, GhostButton, TextInput, SelectInput, ActionIconButton } from "../../components/common/Ui";
 import DataTable from "../../components/common/DataTable";
 import DateRangeFilter from "../../components/common/DateRangeFilter";
@@ -11,7 +11,12 @@ import { exportToExcel } from "../../utils/exportExcel";
 import { formatDate } from "../../utils/formatDate";
 import { HASIL_INTERVIEW_LIST, KRITERIA_PENILAIAN } from "../../lib/constants";
 
-const LIST_KE_USER_OPTIONS = ["Ya", "Tidak"];
+// Interview harian is now independent of turnover -- hiring decisions are
+// made from the Turnover edit screen (Recruitment > Turnover), not here.
+// After scoring, this edit screen only decides whether the candidate is
+// kept (Hold, visible on "Data Peserta Wawancara") or discarded entirely
+// (Dibuang -- the row is deleted).
+const KANDIDAT_STATUS_OPTIONS = ["Hold", "Dibuang"];
 
 const emptyScores = { komunikasi: 3, penampilan: 3, pengetahuan_pekerjaan: 3, keterampilan: 3, pengalaman_kerja: 3 };
 
@@ -21,13 +26,12 @@ export default function InterviewList() {
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState({ from: "", to: "" });
   const [active, setActive] = useState(null);
-  const [hiring, setHiring] = useState(false);
 
   const [editRow, setEditRow] = useState(null);
   const [editScores, setEditScores] = useState(emptyScores);
   const [editHasil, setEditHasil] = useState("");
   const [editBanding, setEditBanding] = useState("");
-  const [editListUser, setEditListUser] = useState("");
+  const [editKandidatStatus, setEditKandidatStatus] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
 
   const load = useCallback(() => {
@@ -57,19 +61,30 @@ export default function InterviewList() {
     });
     setEditHasil(row.hasil_interview || "");
     setEditBanding(row.keterangan_banding === "-" ? "" : row.keterangan_banding || "");
-    setEditListUser(row.list_diajukan_ke_user === "-" ? "" : row.list_diajukan_ke_user || "");
+    setEditKandidatStatus(row.kandidat_status === "Hold" ? "Hold" : "");
   }
 
   async function saveEdit() {
     setSavingEdit(true);
     try {
-      await interviewApi.update(editRow.id, {
-        ...editScores,
-        hasil_interview: editHasil || null,
-        status: editHasil || "Pending",
-        keterangan_banding: editBanding || "-",
-        list_diajukan_ke_user: editListUser || "-",
-      });
+      if (editKandidatStatus === "Dibuang") {
+        const ok = window.confirm(
+          `Buang data ${editRow.nama_kandidat}? Data interview ini akan dihapus permanen dan tidak akan muncul di Data Peserta Wawancara.`
+        );
+        if (!ok) {
+          setSavingEdit(false);
+          return;
+        }
+        await interviewApi.remove(editRow.id);
+      } else {
+        await interviewApi.update(editRow.id, {
+          ...editScores,
+          hasil_interview: editHasil || null,
+          status: editHasil || "Pending",
+          keterangan_banding: editBanding || "-",
+          kandidat_status: editKandidatStatus === "Hold" ? "Hold" : "Pending",
+        });
+      }
       setEditRow(null);
       load();
     } finally {
@@ -77,37 +92,29 @@ export default function InterviewList() {
     }
   }
 
-  async function setHireStatus(status) {
-    setHiring(true);
-    try {
-      await interviewApi.update(active.id, { hire_status: status });
-      if (status === "Hired") {
-        await idCardApi.createFromInterview(active.id);
-      }
-      const refreshed = await interviewApi.list({});
-      setRows(refreshed);
-      setActive((a) => (a ? { ...a, hire_status: status } : a));
-    } finally {
-      setHiring(false);
-    }
-  }
-
   const columns = [
     { key: "tanggal_interview", header: "Tanggal Interview", render: (r) => formatDate(r.tanggal_interview) },
     { key: "nama_kandidat", header: "Nama Kandidat" },
-    { key: "area", header: "Area Penempatan", render: (r) => r.turnover?.area_penempatan || "-" },
-    { key: "posisi_yang_dilamar", header: "Jabatan" },
+    { key: "posisi_yang_dilamar", header: "Posisi Dilamar" },
     { key: "hasil_interview", header: "Hasil Interview", render: (r) => <StatusBadge status={r.hasil_interview || "-"} /> },
+    {
+      key: "kandidat_status",
+      header: "Status Peserta",
+      render: (r) => (r.kandidat_status === "Hold" ? <StatusBadge status="Hold" /> : <span className="text-ink-300">Belum diputuskan</span>),
+    },
+    {
+      key: "turnover",
+      header: "Turnover Terkait",
+      render: (r) => r.turnover?.nomor_turnover || <span className="text-ink-300">Belum diajukan</span>,
+    },
     { key: "hire_status", header: "Hired / Not Hired", render: (r) => <StatusBadge status={r.hire_status || "-"} /> },
-    { key: "keterangan_banding", header: "Ajukan Banding" },
-    { key: "list_diajukan_ke_user", header: "List ke User" },
     {
       key: "aksi",
       header: "Aksi",
       render: (r) => (
         <div className="flex items-center gap-1.5">
           <ActionIconButton icon={Info} onClick={() => openDetail(r)} variant="info" title="Lihat detail" />
-          <ActionIconButton icon={Pencil} onClick={() => openEdit(r)} variant="edit" title="Edit nilai, hasil, banding & list ke user" />
+          <ActionIconButton icon={Pencil} onClick={() => openEdit(r)} variant="edit" title="Edit nilai, hasil & status peserta" />
         </div>
       ),
     },
@@ -117,7 +124,7 @@ export default function InterviewList() {
     <div>
       <PageHeader
         title="Recruitment - Interview Harian"
-        subtitle="Data wawancara kandidat harian dan hasil penilaian."
+        subtitle="Interview bisa dilakukan kapan saja, tidak perlu menunggu adanya turnover. Keputusan hired dilakukan dari layar Turnover."
         action={
           <PrimaryButton onClick={() => navigate("/recruitment/interview/new")}>
             <Plus size={15} /> Tambah Interview Baru
@@ -142,7 +149,7 @@ export default function InterviewList() {
         {loading ? <p className="text-sm text-ink-500 py-6 text-center">Memuat data...</p> : <DataTable columns={columns} rows={rows} />}
       </Card>
 
-      {/* Detail + hire decision modal */}
+      {/* Read-only detail */}
       <Modal open={!!active} onClose={() => setActive(null)} title="Detail Interview Kandidat">
         {active && (
           <div className="space-y-4 text-sm">
@@ -176,49 +183,24 @@ export default function InterviewList() {
                 }
               />
               <DetailField label="Ajukan Banding" value={active.keterangan_banding} />
+              <DetailField label="Turnover Terkait" value={active.turnover?.nomor_turnover} />
             </div>
             <div>
               <p className="text-[11px] font-medium text-ink-500 uppercase mb-1">Keterangan Interview</p>
               <p className="text-ink-900">{active.keterangan_interview || "-"}</p>
             </div>
-
-            <div className="pt-4 border-t border-surface-border">
-              {active.hire_status === "Hired" && (
-                <div className="flex items-center gap-2 text-sm text-green-700 bg-status-green/10 border border-status-green/30 px-3 py-2.5">
-                  <CheckCircle2 size={16} />
-                  Kandidat ditandai hired. Antrean pembuatan ID Card telah dikirim ke modul Training. Kandidat lain
-                  pada turnover ini otomatis ditandai Not Hired.
-                </div>
-              )}
-              {active.hire_status === "Not Hired" && (
-                <div className="flex items-center gap-2 text-sm text-status-red bg-status-red/10 border border-status-red/30 px-3 py-2.5">
-                  <UserX size={16} />
-                  Kandidat ditandai tidak hired. Data disimpan ke Data Peserta Wawancara untuk kemungkinan
-                  penggunaan di turnover lain.
-                </div>
-              )}
-              {(!active.hire_status || active.hire_status === "-") && (
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <p className="text-xs text-ink-500">
-                    Tentukan status rekrutmen kandidat ini. Menandai hired akan memicu proses pembuatan ID Card di
-                    Training dan otomatis menandai kandidat lain pada turnover ini Not Hired.
-                  </p>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <GhostButton onClick={() => setHireStatus("Not Hired")} disabled={hiring}>
-                      <UserX size={14} /> Tandai Not Hired
-                    </GhostButton>
-                    <PrimaryButton onClick={() => setHireStatus("Hired")} disabled={hiring}>
-                      <UserCheck size={14} /> {hiring ? "Memproses..." : "Tandai Hired"}
-                    </PrimaryButton>
-                  </div>
-                </div>
-              )}
-            </div>
+            {active.kandidat_status === "Hold" && !active.turnover_id && (
+              <div className="flex items-center gap-2 text-sm text-ink-700 bg-surface-panel border border-surface-border px-3 py-2.5">
+                <Archive size={16} className="text-primary shrink-0" />
+                Kandidat disimpan di pool "Data Peserta Wawancara" -- bisa diajukan ke turnover manapun yang
+                cocok dari layar Turnover.
+              </div>
+            )}
           </div>
         )}
       </Modal>
 
-      {/* Edit modal: penilaian, hasil interview, ajukan banding & list ke user */}
+      {/* Edit: penilaian, hasil interview & keputusan hold/dibuang */}
       <Modal open={!!editRow} onClose={() => setEditRow(null)} title="Edit Nilai & Hasil Interview" width="max-w-lg">
         {editRow && (
           <div className="space-y-5">
@@ -277,18 +259,23 @@ export default function InterviewList() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-ink-500 mb-1">List ke User</label>
+              <label className="block text-xs font-medium text-ink-500 mb-1">Status Peserta</label>
               <SelectInput
-                value={editListUser}
-                onChange={(e) => setEditListUser(e.target.value)}
-                options={LIST_KE_USER_OPTIONS}
-                placeholder="Pilih..."
+                value={editKandidatStatus}
+                onChange={(e) => setEditKandidatStatus(e.target.value)}
+                options={KANDIDAT_STATUS_OPTIONS}
+                placeholder="Belum diputuskan"
               />
+              <p className="text-[11px] text-ink-300 mt-1">
+                <b>Hold</b>: kandidat disimpan ke "Data Peserta Wawancara" untuk kemungkinan diajukan ke turnover.{" "}
+                <b>Dibuang</b>: data kandidat ini akan dihapus permanen.
+              </p>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <GhostButton onClick={() => setEditRow(null)}>Batal</GhostButton>
               <PrimaryButton onClick={saveEdit} disabled={savingEdit}>
-                <Save size={14} /> {savingEdit ? "Menyimpan..." : "Simpan"}
+                {editKandidatStatus === "Dibuang" ? <Trash2 size={14} /> : <Save size={14} />}
+                {savingEdit ? "Menyimpan..." : editKandidatStatus === "Dibuang" ? "Buang Data" : "Simpan"}
               </PrimaryButton>
             </div>
           </div>

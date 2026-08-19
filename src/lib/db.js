@@ -63,6 +63,9 @@ export const ersApi = {
     if (error) throw error;
     return data;
   },
+  // Accepting an ERS auto-creates its Turnover (server-side trigger for
+  // Supabase, mirrored in mockAdapter for demo mode) -- nothing else to do
+  // here, the caller doesn't need to know that happened.
   async updateStatus(id, status) {
     if (!isSupabaseConfigured) return mockAdapter.updateErsStatus(id, status);
     const { data, error } = await supabase.from("ers_document").update({ status }).eq("id", id).select().single();
@@ -87,22 +90,18 @@ export const turnoverApi = {
     if (error) throw error;
     return data;
   },
-  async create(payload) {
-    if (!isSupabaseConfigured) return mockAdapter.createTurnover(payload);
-    const { data, error } = await supabase.from("turnover").insert(payload).select().single();
+  // Generic update: used both for ER's simple status+note edit AND
+  // Recruitment's richer edit (process dates + keterangan_proses + status).
+  async update(id, patch) {
+    if (!isSupabaseConfigured) return mockAdapter.updateTurnover(id, patch);
+    const { data, error } = await supabase.from("turnover").update(patch).eq("id", id).select().single();
     if (error) throw error;
     return data;
   },
+  // Kept as a thin alias over update() so ER's existing call site doesn't
+  // need to change: updateStatus(id, status, extra) === update(id, {status, ...extra}).
   async updateStatus(id, status, extra = {}) {
-    if (!isSupabaseConfigured) return mockAdapter.updateTurnoverStatus(id, status, extra);
-    const { data, error } = await supabase
-      .from("turnover")
-      .update({ status, ...extra })
-      .eq("id", id)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
+    return this.update(id, { status, ...extra });
   },
 };
 
@@ -113,6 +112,32 @@ export const interviewApi = {
     if (dateFrom) q = q.gte("tanggal_interview", dateFrom);
     if (dateTo) q = q.lte("tanggal_interview", dateTo);
     const { data, error } = await q;
+    if (error) throw error;
+    return data;
+  },
+  // "Data Peserta Wawancara": candidates on Hold, regardless of whether
+  // they're currently assigned to a turnover or already Hired there.
+  async listHold() {
+    if (!isSupabaseConfigured) return mockAdapter.listHoldInterviews();
+    const { data, error } = await supabase
+      .from("interview_harian")
+      .select("*, turnover:turnover(*)")
+      .eq("kandidat_status", "Hold")
+      .order("tanggal_interview", { ascending: false });
+    if (error) throw error;
+    return data;
+  },
+  // Candidates on Hold, not yet assigned to any turnover -- the pool
+  // Recruitment picks from when "memilih peserta yang diajukan" for a
+  // turnover.
+  async listAvailablePool() {
+    if (!isSupabaseConfigured) return mockAdapter.listAvailablePool();
+    const { data, error } = await supabase
+      .from("interview_harian")
+      .select("*")
+      .eq("kandidat_status", "Hold")
+      .is("turnover_id", null)
+      .order("tanggal_interview", { ascending: false });
     if (error) throw error;
     return data;
   },
@@ -128,31 +153,16 @@ export const interviewApi = {
     if (error) throw error;
     return data;
   },
-};
-
-export const candidatesApi = {
-  // Reusable talent pool ("Data Peserta Wawancara") — populated
-  // automatically whenever a candidate is marked Not Hired. Read-only from
-  // the client; rows are written server-side by a trigger (real Supabase)
-  // or from updateInterview (demo mode).
-  async list() {
-    if (!isSupabaseConfigured) return mockAdapter.listCandidates();
-    const { data, error } = await supabase
-      .from("kandidat_pool")
-      .select("*")
-      .order("updated_at", { ascending: false });
+  // "Dibuang" -- there is no DB status for this, the row is removed outright.
+  async remove(id) {
+    if (!isSupabaseConfigured) return mockAdapter.deleteInterview(id);
+    const { error } = await supabase.from("interview_harian").delete().eq("id", id);
     if (error) throw error;
-    return data;
   },
-  async history(candidateId) {
-    if (!isSupabaseConfigured) return mockAdapter.listCandidateHistory(candidateId);
-    const { data, error } = await supabase
-      .from("kandidat_pool_history")
-      .select("*, turnover:turnover(*)")
-      .eq("kandidat_pool_id", candidateId)
-      .order("created_at", { ascending: false });
-    if (error) throw error;
-    return data;
+  // Assign (or unassign, pass null) this candidate to a turnover -- the
+  // "diajukan" action on the Turnover edit screen.
+  async assignToTurnover(id, turnoverId) {
+    return this.update(id, { turnover_id: turnoverId });
   },
 };
 
