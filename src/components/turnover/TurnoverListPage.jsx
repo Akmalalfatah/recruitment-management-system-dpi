@@ -1,30 +1,35 @@
 import { useEffect, useState, useCallback } from "react";
 import { Users, Download, Save, Info } from "lucide-react";
-import { turnoverApi } from "../../lib/db";
-import { PageHeader, Card, PrimaryButton, GhostButton, SelectInput, TextArea, ActionIconButton } from "../../components/common/Ui";
+import { turnoverApi, interviewApi } from "../../lib/db";
+import { PageHeader, Card, PrimaryButton, GhostButton, TextArea, ActionIconButton } from "../../components/common/Ui";
 import DataTable from "../../components/common/DataTable";
 import DateRangeFilter from "../../components/common/DateRangeFilter";
 import StatusBadge from "../../components/common/StatusBadge";
 import Modal from "../../components/common/Modal";
 import TurnoverDetailContent from "./TurnoverDetailContent";
-import { exportToExcel } from "../../utils/exportExcel";
+import { exportTurnoverExcel } from "../../utils/exportExcel";
 import { formatDate } from "../../utils/formatDate";
-import { TURNOVER_STATUS } from "../../lib/constants";
 
 /**
  * variant: "area" -> columns show Area Penempatan / Jabatan / Karyawan Lama (OPS, Recruitment, Training)
  *          "swap"  -> columns show Jabatan / Karyawan Keluar / Karyawan Baru (ER, Payroll)
- * editable: when true (ER only) allows changing status + keterangan proses from the detail modal
- * addButton: { label, to } renders a "+" call-to-action (OPS only)
+ * editable: when true (ER only) allows editing keterangan proses from the detail modal.
+ *           Status itself is Recruitment-only (see pages/recruitment/TurnoverList.jsx)
+ *           and is always shown here as a read-only badge.
+ * showCandidates: when true (OPS, ER, Payroll) shows a read-only "Peserta
+ *           Diajukan" list in the detail modal -- view only, no actions.
+ * addButton: { label, to } renders a "+" call-to-action
  */
-export default function TurnoverListPage({ heading, moduleLabel, variant = "area", editable = false, addButton = null }) {
+export default function TurnoverListPage({ heading, moduleLabel, variant = "area", editable = false, showCandidates = false, addButton = null }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState({ from: "", to: "" });
   const [active, setActive] = useState(null);
-  const [draftStatus, setDraftStatus] = useState("");
   const [draftNote, setDraftNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [assigned, setAssigned] = useState([]);
+  const [assignedLoading, setAssignedLoading] = useState(false);
+  const [candidateDetail, setCandidateDetail] = useState(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -40,14 +45,21 @@ export default function TurnoverListPage({ heading, moduleLabel, variant = "area
 
   function openDetail(row) {
     setActive(row);
-    setDraftStatus(row.status);
     setDraftNote(row.keterangan_proses || "");
+    setAssigned([]);
+    if (showCandidates) {
+      setAssignedLoading(true);
+      interviewApi
+        .list({})
+        .then((all) => setAssigned(all.filter((i) => i.turnover_id === row.id)))
+        .finally(() => setAssignedLoading(false));
+    }
   }
 
   async function saveChanges() {
     setSaving(true);
     try {
-      await turnoverApi.updateStatus(active.id, draftStatus, { keterangan_proses: draftNote });
+      await turnoverApi.update(active.id, { keterangan_proses: draftNote });
       setActive(null);
       load();
     } finally {
@@ -94,7 +106,7 @@ export default function TurnoverListPage({ heading, moduleLabel, variant = "area
           <div className="flex items-center gap-3 flex-wrap">
             <DateRangeFilter from={range.from} to={range.to} onChange={setRange} />
             <button
-              onClick={() => exportToExcel(rows, "Daftar_Turnover")}
+              onClick={() => exportTurnoverExcel(rows, "Daftar_Turnover")}
               className="flex items-center gap-1.5 text-xs font-semibold text-primary border border-primary/30 bg-primary/5 hover:bg-primary/10 px-3 py-1.5 "
             >
               <Download size={13} /> Ekspor Excel
@@ -111,21 +123,43 @@ export default function TurnoverListPage({ heading, moduleLabel, variant = "area
       <Modal open={!!active} onClose={() => setActive(null)} title="Detail Turnover">
         <TurnoverDetailContent record={active} />
 
+        {showCandidates && active && (
+          <div className="mt-5 pt-4 border-t border-surface-border">
+            <p className="text-xs font-semibold text-ink-700 uppercase tracking-wide mb-3">Peserta Diajukan</p>
+            {assignedLoading ? (
+              <p className="text-xs text-ink-500">Memuat peserta...</p>
+            ) : assigned.length === 0 ? (
+              <p className="text-xs text-ink-500">Belum ada peserta yang diajukan ke turnover ini.</p>
+            ) : (
+              <div className="space-y-2">
+                {assigned.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setCandidateDetail(c)}
+                    className="w-full text-left border border-surface-border px-3 py-2.5 flex items-center justify-between gap-3 flex-wrap hover:border-primary/50 hover:bg-primary/5 transition-colors"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-ink-900">{c.nama_kandidat}</p>
+                      <p className="text-[11px] text-ink-500">{c.posisi_yang_dilamar || "-"}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <StatusBadge status={c.hasil_interview || "-"} />
+                      <StatusBadge status={c.hire_status || "-"} />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {editable && active && (
           <div className="mt-5 pt-4 border-t border-surface-border space-y-3">
-            <p className="text-xs font-semibold text-ink-700 uppercase tracking-wide">Proses &amp; Keputusan</p>
+            <p className="text-xs font-semibold text-ink-700 uppercase tracking-wide">Keterangan Proses</p>
             <div>
-              <label className="block text-xs font-medium text-ink-500 mb-1">Status</label>
-              <SelectInput
-                value={draftStatus}
-                onChange={(e) => setDraftStatus(e.target.value)}
-                options={Object.values(TURNOVER_STATUS)}
-                placeholder="Pilih status"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-ink-500 mb-1">Keterangan Proses</label>
-              <TextArea value={draftNote} onChange={(e) => setDraftNote(e.target.value)} placeholder="Catatan proses ER..." />
+              <TextArea value={draftNote} onChange={(e) => setDraftNote(e.target.value)} placeholder="Catatan proses..." />
+              <p className="text-[11px] text-ink-300 mt-1">Status turnover hanya bisa diubah oleh Recruitment.</p>
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <GhostButton onClick={() => setActive(null)}>Batal</GhostButton>
@@ -136,6 +170,46 @@ export default function TurnoverListPage({ heading, moduleLabel, variant = "area
           </div>
         )}
       </Modal>
+
+      <Modal open={!!candidateDetail} onClose={() => setCandidateDetail(null)} title="Detail Peserta">
+        {candidateDetail && (
+          <div className="space-y-4 text-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-bold text-ink-900">{candidateDetail.nama_kandidat}</p>
+                <p className="text-xs text-ink-500">{candidateDetail.posisi_yang_dilamar || "-"}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <StatusBadge status={candidateDetail.hasil_interview || "-"} />
+                <StatusBadge status={candidateDetail.hire_status || "-"} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <CandidateField label="No. HP" value={candidateDetail.no_hp} />
+              <CandidateField label="Domisili" value={candidateDetail.domisili} />
+              <CandidateField label="Pendidikan" value={candidateDetail.pendidikan} />
+              <CandidateField label="Jurusan" value={candidateDetail.jurusan} />
+              <CandidateField label="Agama" value={candidateDetail.agama} />
+              <CandidateField label="Tanggal Lahir" value={candidateDetail.tanggal_lahir} />
+              <CandidateField label="Info Lowongan" value={candidateDetail.info_loker} />
+              <CandidateField label="Referensi" value={candidateDetail.keterangan_referensi} />
+            </div>
+            <div>
+              <p className="text-[11px] font-medium text-ink-500 uppercase mb-1">Keterangan Interview</p>
+              <p className="text-ink-900">{candidateDetail.keterangan_interview || "-"}</p>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+function CandidateField({ label, value }) {
+  return (
+    <div>
+      <p className="text-[11px] font-medium text-ink-500 uppercase">{label}</p>
+      <p className="text-ink-900">{value || "-"}</p>
     </div>
   );
 }

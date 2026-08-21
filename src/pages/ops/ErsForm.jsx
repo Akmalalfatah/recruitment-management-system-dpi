@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Info } from "lucide-react";
 import { ersApi } from "../../lib/db";
-import { Field, TextInput, TextArea, SelectInput, PrimaryButton, Card } from "../../components/common/Ui";
+import { Field, TextInput, SelectInput, PrimaryButton, Card } from "../../components/common/Ui";
 import { JABATAN_LIST, ALASAN_ERS_LIST, OPS_DIVISI, ERS_DISETUJUI_1_DEFAULT, ERS_DITERIMA_DEFAULT } from "../../lib/constants";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -31,8 +31,6 @@ const emptyForm = {
   disetujui_2: "",
   diterima_oleh: ERS_DITERIMA_DEFAULT,
 };
-
-const REQUIREMENT_MAX_LENGTH = 150;
 
 export default function ErsForm() {
   const navigate = useNavigate();
@@ -153,37 +151,16 @@ export default function ErsForm() {
             <p className="text-sm font-semibold text-ink-900 mb-3">Persyaratan Jabatan</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Kualifikasi">
-                <TextArea
-                  value={form.kualifikasi}
-                  onChange={(e) => set("kualifikasi", e.target.value)}
-                  placeholder="cth. SESUAI JOB DESCRIPTIONS"
-                  maxLength={REQUIREMENT_MAX_LENGTH}
-                  rows={2}
-                />
-                <p className="text-[11px] text-ink-300 mt-1 text-right">{form.kualifikasi.length}/{REQUIREMENT_MAX_LENGTH} karakter</p>
+                <TextInput value={form.kualifikasi} onChange={(e) => set("kualifikasi", e.target.value)} placeholder="cth. SESUAI JOB DESCRIPTIONS" maxLength={100} />
               </Field>
               <Field label="Bahasa">
-                <TextInput value={form.bahasa} onChange={(e) => set("bahasa", e.target.value)} placeholder="-" />
+                <TextInput value={form.bahasa} onChange={(e) => set("bahasa", e.target.value)} placeholder="-" maxLength={100} />
               </Field>
               <Field label="Keahlian">
-                <TextArea
-                  value={form.keahlian}
-                  onChange={(e) => set("keahlian", e.target.value)}
-                  placeholder="-"
-                  maxLength={REQUIREMENT_MAX_LENGTH}
-                  rows={2}
-                />
-                <p className="text-[11px] text-ink-300 mt-1 text-right">{form.keahlian.length}/{REQUIREMENT_MAX_LENGTH} karakter</p>
+                <TextInput value={form.keahlian} onChange={(e) => set("keahlian", e.target.value)} placeholder="-" maxLength={100} />
               </Field>
               <Field label="Sertifikat">
-                <TextArea
-                  value={form.sertifikat}
-                  onChange={(e) => set("sertifikat", e.target.value)}
-                  placeholder="-"
-                  maxLength={REQUIREMENT_MAX_LENGTH}
-                  rows={2}
-                />
-                <p className="text-[11px] text-ink-300 mt-1 text-right">{form.sertifikat.length}/{REQUIREMENT_MAX_LENGTH} karakter</p>
+                <TextInput value={form.sertifikat} onChange={(e) => set("sertifikat", e.target.value)} placeholder="-" maxLength={100} />
               </Field>
             </div>
           </div>

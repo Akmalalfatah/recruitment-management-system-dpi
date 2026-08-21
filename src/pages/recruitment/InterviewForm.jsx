@@ -70,7 +70,6 @@ export default function InterviewForm() {
         keterangan_banding: "-",
         hasil_interview: null,
         hire_status: "-",
-        kandidat_status: "Pending",
       });
       navigate("/recruitment/interview");
     } catch (err) {
@@ -92,15 +91,16 @@ export default function InterviewForm() {
         <h1 className="text-lg font-bold text-ink-900 mb-1">Form Interview Harian</h1>
         <p className="text-sm text-ink-500 mb-5">
           Interview bisa dilakukan kapan saja, tidak perlu terkait turnover tertentu -- kandidat baru diajukan ke
-          turnover yang sesuai belakangan lewat layar Turnover. Nilai penilaian, hasil interview, dan status
-          hold/dibuang diisi belakangan lewat aksi pensil pada Daftar Interview.
+          turnover yang sesuai belakangan lewat layar Turnover. Nilai penilaian dan hasil interview diisi belakangan
+          lewat aksi pensil pada Daftar Interview -- kandidat dengan hasil Recommended/Considered otomatis muncul di
+          Data Peserta Wawancara.
         </p>
 
         {holdCandidates.length > 0 && (
           <div className="mb-5 bg-primary-50 border border-primary-100 px-4 py-3">
             <Field
               label="Pilih dari Data Peserta Wawancara (opsional)"
-              hint="Isi otomatis data pribadi dari peserta yang pernah diwawancara sebelumnya (Hold) jika orang yang sama interview ulang untuk posisi lain."
+              hint="Isi otomatis data pribadi dari peserta yang pernah diwawancara sebelumnya jika orang yang sama interview ulang untuk posisi lain."
             >
               <select
                 onChange={(e) => handleReuseCandidate(e.target.value)}
@@ -128,6 +128,9 @@ export default function InterviewForm() {
             </Field>
             <Field label="Pendidikan">
               <SelectInput value={form.pendidikan} onChange={(e) => set("pendidikan", e.target.value)} options={PENDIDIKAN_LIST} />
+            </Field>
+            <Field label="Jurusan">
+              <TextInput value={form.jurusan} onChange={(e) => set("jurusan", e.target.value)} placeholder="-" />
             </Field>
             <Field label="Agama">
               <SelectInput value={form.agama} onChange={(e) => set("agama", e.target.value)} options={AGAMA_LIST} />

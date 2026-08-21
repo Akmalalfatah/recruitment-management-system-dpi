@@ -10,8 +10,8 @@ import { ROLES, OPS_DIVISI, ERS_DISETUJUI_1_DEFAULT, ERS_DITERIMA_DEFAULT } from
 // `ers_document_create_turnover`) when an ERS is Accepted -- there's no
 // createTurnover exposed to OPS anymore. interview_harian no longer needs
 // a turnover_id at creation, and there's no more separate candidate-pool
-// table -- "Data Peserta Wawancara" is just interview_harian rows filtered
-// by kandidat_status = 'Hold'.
+// table -- "Data Peserta Wawancara" is derived from hasil_interview being
+// Recommended/Considered.
 // -----------------------------------------------------------------------
 
 const DB_KEY = "dpi_demo_db_v2";
@@ -81,7 +81,7 @@ function seed() {
       id: "to_2", area_penempatan: "BCA Wisma Pluit", created_by: "u_ops", ers_document_id: "ers_2",
       nomor_turnover: "TO/2026/001", jabatan: "ADMINISTRASI", nama_karyawan_existing: "Elyani Feronica",
       alasan_keluar: "BERAKHIR KONTRAK", tanggal_permintaan: todayMinus(6), tanggal_keluar: todayMinus(4),
-      status: "Pending", nama_rekruter: "Ananda Putri", nama_koordinator: "-",
+      status: "Sudah Kirim", nama_rekruter: "Ananda Putri", nama_koordinator: "-", nama_karyawan_baru: null,
       tgl_kirim_kandidat: todayMinus(3), tgl_interview_user: todayMinus(2), tgl_pkwt: "-", tgl_aktif_kerja: "-",
       nama_user: "Michelle Citra Amanda Setiawan", keterangan_proses: "Menunggu keputusan kandidat.",
     },
@@ -95,19 +95,22 @@ function seed() {
       agama: "Islam", tanggal_lahir: "1998-04-12", info_loker: "LinkedIn", keterangan_referensi: "-",
       keterangan_interview: "Kandidat komunikatif, siap kerja shift.", komunikasi: 4, penampilan: 4,
       pengetahuan_pekerjaan: 3, keterampilan: 4, pengalaman_kerja: 4, hasil_interview: "Recommended",
-      keterangan_banding: "-", status: "Recommended", hire_status: "-", kandidat_status: "Hold",
+      keterangan_banding: "-", status: "Recommended", hire_status: "-",
     },
     {
-      // Independent interview: no turnover yet, just on Hold in the pool.
+      // Independent interview: no turnover yet, tapi hasil Recommended/
+      // Considered jadi otomatis muncul di Data Peserta Wawancara.
       id: "int_2", turnover_id: null, nama_koordinator: "Jeje", tenggat_waktu_proses: 5,
       tanggal_interview: todayMinus(1), nama_kandidat: "Elyani Feronica", no_hp: "081298765432",
       posisi_yang_dilamar: "Administrasi", domisili: "Jakarta Pusat", pendidikan: "SMA/K", jurusan: "-",
       agama: "Kristen", tanggal_lahir: "2000-01-20", info_loker: "Referensi Internal", keterangan_referensi: "Karyawan lama",
       keterangan_interview: "Masih menunggu keputusan user.", komunikasi: 3, penampilan: 3,
       pengetahuan_pekerjaan: 3, keterampilan: 3, pengalaman_kerja: 2, hasil_interview: "Considered",
-      keterangan_banding: "-", status: "Pending", hire_status: "-", kandidat_status: "Hold",
+      keterangan_banding: "-", status: "Pending", hire_status: "-",
     },
     {
+      // Not Recommended -- tetap ada di Interview Harian saja, tidak pernah
+      // muncul di Data Peserta Wawancara.
       id: "int_3", turnover_id: null, nama_koordinator: "Ananda", tenggat_waktu_proses: 10,
       tanggal_interview: todayMinus(8), nama_kandidat: "Ahmad Yani", no_hp: "081211122233",
       posisi_yang_dilamar: "Teknisi AC", domisili: "Tangerang", pendidikan: "D3", jurusan: "Teknik Mesin",
@@ -115,8 +118,13 @@ function seed() {
       keterangan_interview: "Pengalaman kurang sesuai kebutuhan, tapi masih layak dipertimbangkan lagi.",
       komunikasi: 2, penampilan: 3, pengetahuan_pekerjaan: 2, keterampilan: 2, pengalaman_kerja: 2,
       hasil_interview: "Not Recommended", keterangan_banding: "-", status: "Not Recommended",
-      hire_status: "-", kandidat_status: "Hold",
+      hire_status: "-",
     },
+  ];
+
+  // Riwayat pengajuan turnover per kandidat -- mirrors interview_turnover_log.
+  const interview_turnover_log = [
+    { id: "log_1", interview_harian_id: "int_1", turnover_id: "to_2", assigned_at: `${todayMinus(2)}T09:05:00.000Z`, unassigned_at: null, outcome: null },
   ];
 
   const id_card_process = [];
@@ -127,7 +135,7 @@ function seed() {
     { id: "notif_3", type: "interview", title: "Interview dijadwalkan", message: `Budi Santoso — Administrasi pada ${todayMinus(2)}`, related_id: "int_1", created_at: `${todayMinus(2)}T09:00:00.000Z` },
   ];
 
-  return { users, ers_document, turnover, interview_harian, id_card_process, notifications };
+  return { users, ers_document, turnover, interview_harian, interview_turnover_log, id_card_process, notifications };
 }
 
 function loadDb() {
@@ -191,7 +199,7 @@ function autoCreateTurnoverForErs(db, ers) {
     nama_user: ers.pemohon_nama,
     keterangan_proses: null,
     nama_karyawan_baru: null,
-    status: "Pending",
+    status: "Belum Kirim",
   };
   db.turnover.unshift(rec);
   pushNotification(
@@ -202,6 +210,32 @@ function autoCreateTurnoverForErs(db, ers) {
     rec.id
   );
   return rec;
+}
+
+// Mirrors trigger `interview_log_turnover_assignment`: close the log entry
+// for the assignment that just ended (if any) and open a new one for the
+// assignment that just started (if any).
+function logTurnoverAssignmentChange(db, rec, prevTurnoverId, outcomeAtClose) {
+  db.interview_turnover_log = db.interview_turnover_log || [];
+  if (prevTurnoverId) {
+    const openEntry = db.interview_turnover_log.find(
+      (l) => l.interview_harian_id === rec.id && l.turnover_id === prevTurnoverId && !l.unassigned_at
+    );
+    if (openEntry) {
+      openEntry.unassigned_at = new Date().toISOString();
+      openEntry.outcome = outcomeAtClose;
+    }
+  }
+  if (rec.turnover_id) {
+    db.interview_turnover_log.unshift({
+      id: uid("log"),
+      interview_harian_id: rec.id,
+      turnover_id: rec.turnover_id,
+      assigned_at: new Date().toISOString(),
+      unassigned_at: null,
+      outcome: null,
+    });
+  }
 }
 
 function delay(ms = 120) {
@@ -278,12 +312,17 @@ export const mockAdapter = {
   },
 
   // Accepting an ERS auto-creates its turnover, mirroring the real
-  // Supabase trigger `ers_document_create_turnover`.
+  // Supabase trigger `ers_document_create_turnover`. Once an ERS is
+  // Accepted or Rejected, its status is final -- mirrors trigger
+  // `ers_document_lock_status`.
   async updateErsStatus(id, status) {
     await delay();
     const db = loadDb();
     const rec = db.ers_document.find((e) => e.id === id);
     if (rec) {
+      if (rec.status !== "Pending" && status !== rec.status) {
+        throw new Error(`Status ERS ini sudah ${rec.status} dan tidak bisa diubah lagi.`);
+      }
       const wasAccepted = rec.status === "Accepted";
       rec.status = status;
       if (status === "Accepted" && !wasAccepted) {
@@ -317,11 +356,11 @@ export const mockAdapter = {
     if (rec) {
       const prevStatus = rec.status;
       Object.assign(rec, patch);
-      if ("status" in patch && patch.status !== prevStatus && (patch.status === "Accepted" || patch.status === "Rejected")) {
+      if ("status" in patch && patch.status !== prevStatus && patch.status === "Terpilih") {
         pushNotification(
           db,
           "turnover",
-          patch.status === "Accepted" ? "Turnover selesai" : "Turnover ditolak",
+          "Turnover selesai",
           `${rec.jabatan || "-"} — ${rec.nama_karyawan_baru || rec.nama_karyawan_existing || "-"} (${rec.nomor_turnover})`,
           rec.id
         );
@@ -340,25 +379,38 @@ export const mockAdapter = {
       .sort((a, b) => (a.tanggal_interview < b.tanggal_interview ? 1 : -1));
   },
 
-  // "Data Peserta Wawancara": every candidate on Hold, assigned or not,
-  // hired or not.
+  // "Data Peserta Wawancara": whether a candidate shows up here is derived
+  // automatically from hasil_interview -- Recommended/Considered are kept,
+  // Not Recommended stays only in Interview Harian. No manual choice.
   async listHoldInterviews() {
     await delay();
     const db = loadDb();
     return db.interview_harian
-      .filter((i) => i.kandidat_status === "Hold")
+      .filter((i) => i.hasil_interview === "Recommended" || i.hasil_interview === "Considered")
       .map((i) => ({ ...i, turnover: db.turnover.find((t) => t.id === i.turnover_id) || null }))
       .sort((a, b) => (a.tanggal_interview < b.tanggal_interview ? 1 : -1));
   },
 
   // Candidates Recruitment can pick from when "mengajukan peserta" to a
-  // turnover: Hold + not yet assigned anywhere.
+  // turnover: Recommended/Considered + not yet assigned anywhere. A Hired
+  // candidate always keeps turnover_id set, so never appears here.
   async listAvailablePool() {
     await delay();
     const db = loadDb();
     return db.interview_harian
-      .filter((i) => i.kandidat_status === "Hold" && !i.turnover_id)
+      .filter((i) => (i.hasil_interview === "Recommended" || i.hasil_interview === "Considered") && !i.turnover_id)
       .sort((a, b) => (a.tanggal_interview < b.tanggal_interview ? 1 : -1));
+  },
+
+  // "Riwayat pengajuan": every turnover this candidate has ever been
+  // proposed to, most recent first.
+  async listInterviewHistory(interviewId) {
+    await delay();
+    const db = loadDb();
+    return (db.interview_turnover_log || [])
+      .filter((l) => l.interview_harian_id === interviewId)
+      .map((l) => ({ ...l, turnover: db.turnover.find((t) => t.id === l.turnover_id) || null }))
+      .sort((a, b) => (a.assigned_at < b.assigned_at ? 1 : -1));
   },
 
   async createInterview(payload) {
@@ -368,7 +420,6 @@ export const mockAdapter = {
       id: uid("int"),
       status: payload.hasil_interview || "Pending",
       hire_status: "-",
-      kandidat_status: "Pending",
       turnover_id: null,
       ...payload,
     };
@@ -393,29 +444,43 @@ export const mockAdapter = {
       return null;
     }
     const prevHireStatus = rec.hire_status;
+    const prevTurnoverId = rec.turnover_id;
 
-    // Mirrors trg_interview_check_turnover_open_upd: block (re)assigning a
-    // candidate to a turnover that's already closed (has a hired candidate).
-    if ("turnover_id" in patch && patch.turnover_id && patch.turnover_id !== rec.turnover_id) {
-      const target = db.turnover.find((t) => t.id === patch.turnover_id);
-      if (target?.nama_karyawan_baru) {
-        throw new Error(`Turnover ini sudah memiliki kandidat yang Hired (${target.nama_karyawan_baru}), tidak bisa menambah peserta baru.`);
+    if ("turnover_id" in patch && patch.turnover_id !== prevTurnoverId) {
+      // Mirrors trg_interview_check_turnover_open_upd: a Hired candidate
+      // can never be moved/unassigned; a closed (Terpilih) turnover can't
+      // accept new candidates.
+      if (prevHireStatus === "Hired") {
+        throw new Error("Kandidat ini sudah Hired, tidak bisa dipindah/diajukan ke turnover lain.");
+      }
+      if (patch.turnover_id) {
+        const target = db.turnover.find((t) => t.id === patch.turnover_id);
+        if (target?.status === "Terpilih") {
+          throw new Error(`Turnover ini sudah Terpilih (selesai), tidak bisa menambah peserta baru.`);
+        }
       }
     }
 
     Object.assign(rec, patch);
 
+    // Mirrors trg_interview_log_turnover_assignment: keep "riwayat
+    // pengajuan" (interview_turnover_log) in sync whenever turnover_id
+    // actually changes.
+    if ("turnover_id" in patch && patch.turnover_id !== prevTurnoverId) {
+      logTurnoverAssignmentChange(db, rec, prevTurnoverId, prevHireStatus);
+    }
+
     // Mirrors trg_turnover_sync_karyawan_baru: hire/un-hire syncs the
-    // linked turnover's nama_karyawan_baru + auto-completes it.
+    // linked turnover's nama_karyawan_baru + auto-completes it ("Terpilih").
     if (rec.turnover_id && "hire_status" in patch) {
       const t = db.turnover.find((x) => x.id === rec.turnover_id);
       if (t) {
         if (rec.hire_status === "Hired") {
           t.nama_karyawan_baru = rec.nama_kandidat;
-          t.status = "Accepted";
+          t.status = "Terpilih";
         } else if (prevHireStatus === "Hired" && t.nama_karyawan_baru === rec.nama_kandidat) {
           t.nama_karyawan_baru = null;
-          t.status = "Pending";
+          t.status = "Interview User";
         }
       }
     }
@@ -430,11 +495,15 @@ export const mockAdapter = {
       );
       // trg_interview_harian_auto_not_hire_siblings: every OTHER candidate
       // assigned to this same turnover is no longer needed once one is
-      // Hired -- auto-flip them to Not Hired.
+      // Hired -- auto-flip them to Not Hired AND free them back to the
+      // pool (turnover_id cleared) so they're proposable elsewhere.
       db.interview_harian
         .filter((i) => i.turnover_id === rec.turnover_id && i.id !== rec.id && i.hire_status !== "Hired")
         .forEach((sibling) => {
+          const siblingPrevTurnoverId = sibling.turnover_id;
           sibling.hire_status = "Not Hired";
+          sibling.turnover_id = null;
+          logTurnoverAssignmentChange(db, sibling, siblingPrevTurnoverId, "Not Hired");
         });
     }
 

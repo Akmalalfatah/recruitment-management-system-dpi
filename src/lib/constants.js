@@ -28,11 +28,17 @@ export const ROLE_HOME = {
   [ROLES.HR_PAYROLL]: "/dashboard",
 };
 
-export const TURNOVER_STATUS = {
-  PENDING: "Pending",
-  ACCEPTED: "Accepted",
-  REJECTED: "Rejected",
-};
+// 7-stage manual pipeline for turnover.status. Only Recruitment can move a
+// turnover through these (enforced in the DB too, see
+// supabase/migration_v11_turnover_status_riwayat.sql). "Terpilih" is the
+// completed/"selesai" state -- it's still set AUTOMATICALLY the instant a
+// candidate is marked Hired, never picked manually.
+export const TURNOVER_STATUS_LIST = [
+  "Belum Kirim", "Sudah Kirim", "Pengurangan", "Interview User",
+  "Terpilih", "Menunggu Info User", "Dihold Sementara",
+];
+export const TURNOVER_STATUS_TERPILIH = "Terpilih";
+export const TURNOVER_STATUS_DEFAULT = "Belum Kirim";
 
 export const ERS_STATUS = {
   PENDING: "Pending",
@@ -51,9 +57,18 @@ export const STATUS_BADGE_STYLE = {
   Completed: "bg-status-green",
   Hired: "bg-status-green",
   "Not Hired": "bg-status-red",
-  Hold: "bg-status-blue",
   "Belum Hired": "bg-ink-300",
   "-": "bg-ink-300",
+  // Turnover's 7-stage pipeline
+  "Belum Kirim": "bg-ink-300",
+  "Sudah Kirim": "bg-status-blue",
+  Pengurangan: "bg-status-orange",
+  "Interview User": "bg-status-blue",
+  Terpilih: "bg-status-green",
+  "Menunggu Info User": "bg-status-orange",
+  "Dihold Sementara": "bg-status-red",
+  "Masih Diajukan": "bg-status-blue",
+  Dilepas: "bg-ink-300",
 };
 
 export const JABATAN_LIST = [

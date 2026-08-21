@@ -6,11 +6,12 @@ import DataTable from "../../components/common/DataTable";
 import DateRangeFilter from "../../components/common/DateRangeFilter";
 import StatusBadge from "../../components/common/StatusBadge";
 import Modal from "../../components/common/Modal";
-import { exportToExcel } from "../../utils/exportExcel";
+import { exportTurnoverExcel } from "../../utils/exportExcel";
 import { formatDate } from "../../utils/formatDate";
-import { ALASAN_KELUAR_LIST } from "../../lib/constants";
+import { ALASAN_KELUAR_LIST, TURNOVER_STATUS_LIST, TURNOVER_STATUS_TERPILIH } from "../../lib/constants";
 
 const emptyDraft = {
+  status: "",
   alasan_keluar: "",
   tanggal_keluar: "",
   nama_rekruter: "",
@@ -43,6 +44,7 @@ export default function RecruitmentTurnoverList() {
   const [draft, setDraft] = useState(emptyDraft);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState(null); // interview id currently being assigned/unassigned/hired
+  const [candidateDetail, setCandidateDetail] = useState(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -71,6 +73,7 @@ export default function RecruitmentTurnoverList() {
     setActive(row);
     setShowPicker(false);
     setDraft({
+      status: row.status || "",
       alasan_keluar: row.alasan_keluar || "",
       tanggal_keluar: row.tanggal_keluar || "",
       nama_rekruter: row.nama_rekruter || "",
@@ -146,7 +149,7 @@ export default function RecruitmentTurnoverList() {
     }
   }
 
-  const isClosed = active?.status === "Accepted";
+  const isClosed = active?.status === TURNOVER_STATUS_TERPILIH;
 
   const columns = [
     { key: "area_penempatan", header: "Area Penempatan" },
@@ -176,7 +179,7 @@ export default function RecruitmentTurnoverList() {
           <div className="flex items-center gap-3 flex-wrap">
             <DateRangeFilter from={range.from} to={range.to} onChange={setRange} />
             <button
-              onClick={() => exportToExcel(rows, "Daftar_Turnover_Recruitment")}
+              onClick={() => exportTurnoverExcel(rows, "Daftar_Turnover_Recruitment")}
               className="flex items-center gap-1.5 text-xs font-semibold text-primary border border-primary/30 bg-primary/5 hover:bg-primary/10 px-3 py-1.5 "
             >
               <Download size={13} /> Ekspor Excel
@@ -215,6 +218,17 @@ export default function RecruitmentTurnoverList() {
             <div>
               <p className="text-xs font-semibold text-ink-700 uppercase tracking-wide mb-3">Data &amp; Tanggal Proses</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-ink-500 mb-1">Status Turnover</label>
+                  <SelectInput
+                    value={draft.status}
+                    onChange={(e) => setDraft((d) => ({ ...d, status: e.target.value }))}
+                    options={TURNOVER_STATUS_LIST}
+                  />
+                  <p className="text-[11px] text-ink-300 mt-1">
+                    "Terpilih" otomatis ter-set saat kandidat ditandai Hired -- tidak perlu dipilih manual.
+                  </p>
+                </div>
                 <div>
                   <label className="block text-xs font-medium text-ink-500 mb-1">Alasan Keluar</label>
                   <SelectInput
@@ -274,10 +288,15 @@ export default function RecruitmentTurnoverList() {
                 <div className="space-y-2">
                   {assigned.map((c) => (
                     <div key={c.id} className="border border-surface-border px-3 py-2.5 flex items-center justify-between gap-3 flex-wrap">
-                      <div>
+                      <button
+                        type="button"
+                        onClick={() => setCandidateDetail(c)}
+                        className="text-left flex-1 min-w-[120px] hover:opacity-70 transition-opacity"
+                        title="Lihat detail peserta"
+                      >
                         <p className="text-sm font-semibold text-ink-900">{c.nama_kandidat}</p>
                         <p className="text-[11px] text-ink-500">{c.posisi_yang_dilamar || "-"}</p>
-                      </div>
+                      </button>
                       <div className="flex items-center gap-2 flex-wrap">
                         <StatusBadge status={c.hasil_interview || "-"} />
                         <StatusBadge status={c.hire_status || "-"} />
@@ -337,6 +356,46 @@ export default function RecruitmentTurnoverList() {
           </div>
         )}
       </Modal>
+
+      <Modal open={!!candidateDetail} onClose={() => setCandidateDetail(null)} title="Detail Peserta">
+        {candidateDetail && (
+          <div className="space-y-4 text-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-bold text-ink-900">{candidateDetail.nama_kandidat}</p>
+                <p className="text-xs text-ink-500">{candidateDetail.posisi_yang_dilamar || "-"}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <StatusBadge status={candidateDetail.hasil_interview || "-"} />
+                <StatusBadge status={candidateDetail.hire_status || "-"} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <CandidateField label="No. HP" value={candidateDetail.no_hp} />
+              <CandidateField label="Domisili" value={candidateDetail.domisili} />
+              <CandidateField label="Pendidikan" value={candidateDetail.pendidikan} />
+              <CandidateField label="Jurusan" value={candidateDetail.jurusan} />
+              <CandidateField label="Agama" value={candidateDetail.agama} />
+              <CandidateField label="Tanggal Lahir" value={candidateDetail.tanggal_lahir} />
+              <CandidateField label="Info Lowongan" value={candidateDetail.info_loker} />
+              <CandidateField label="Referensi" value={candidateDetail.keterangan_referensi} />
+            </div>
+            <div>
+              <p className="text-[11px] font-medium text-ink-500 uppercase mb-1">Keterangan Interview</p>
+              <p className="text-ink-900">{candidateDetail.keterangan_interview || "-"}</p>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+function CandidateField({ label, value }) {
+  return (
+    <div>
+      <p className="text-[11px] font-medium text-ink-500 uppercase">{label}</p>
+      <p className="text-ink-900">{value || "-"}</p>
     </div>
   );
 }

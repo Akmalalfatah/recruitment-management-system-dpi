@@ -7,6 +7,7 @@ export default function PayrollTurnoverList() {
       moduleLabel="Payroll"
       variant="swap"
       editable={false}
+      showCandidates
     />
   );
 }

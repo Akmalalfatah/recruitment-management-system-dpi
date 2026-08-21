@@ -143,20 +143,28 @@ export default function RecruitmentErsList() {
               <FileDown size={13} /> {downloading ? "Menyiapkan PDF..." : "Download ERS (PDF)"}
             </button>
 
-            <div className="pt-4 border-t border-surface-border space-y-3">
-              <p className="text-xs font-semibold text-ink-700 uppercase tracking-wide">Terima / Tolak ERS</p>
-              <SelectInput
-                value={draftStatus}
-                onChange={(e) => setDraftStatus(e.target.value)}
-                options={Object.values(ERS_STATUS)}
-              />
-              <div className="flex justify-end gap-2 pt-1">
-                <GhostButton onClick={() => setActive(null)}>Batal</GhostButton>
-                <PrimaryButton onClick={saveStatus} disabled={saving}>
-                  <Save size={14} /> {saving ? "Menyimpan..." : "Simpan"}
-                </PrimaryButton>
+            {active.status === "Pending" ? (
+              <div className="pt-4 border-t border-surface-border space-y-3">
+                <p className="text-xs font-semibold text-ink-700 uppercase tracking-wide">Terima / Tolak ERS</p>
+                <SelectInput
+                  value={draftStatus}
+                  onChange={(e) => setDraftStatus(e.target.value)}
+                  options={Object.values(ERS_STATUS)}
+                />
+                <div className="flex justify-end gap-2 pt-1">
+                  <GhostButton onClick={() => setActive(null)}>Batal</GhostButton>
+                  <PrimaryButton onClick={saveStatus} disabled={saving}>
+                    <Save size={14} /> {saving ? "Menyimpan..." : "Simpan"}
+                  </PrimaryButton>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="pt-4 border-t border-surface-border">
+                <p className="text-xs text-ink-500">
+                  ERS ini sudah <b>{active.status}</b> dan tidak bisa diubah lagi.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </Modal>

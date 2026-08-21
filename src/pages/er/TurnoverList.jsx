@@ -7,6 +7,7 @@ export default function ErTurnoverList() {
       moduleLabel="Employee Relation"
       variant="swap"
       editable
+      showCandidates
     />
   );
 }

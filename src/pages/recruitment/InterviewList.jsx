@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Users, Download, Plus, Pencil, Save, Info, Archive, Trash2 } from "lucide-react";
+import { Users, Download, Plus, Pencil, Save, Info } from "lucide-react";
 import { interviewApi } from "../../lib/db";
 import { PageHeader, Card, PrimaryButton, GhostButton, TextInput, SelectInput, ActionIconButton } from "../../components/common/Ui";
 import DataTable from "../../components/common/DataTable";
@@ -13,12 +13,15 @@ import { HASIL_INTERVIEW_LIST, KRITERIA_PENILAIAN } from "../../lib/constants";
 
 // Interview harian is now independent of turnover -- hiring decisions are
 // made from the Turnover edit screen (Recruitment > Turnover), not here.
-// After scoring, this edit screen only decides whether the candidate is
-// kept (Hold, visible on "Data Peserta Wawancara") or discarded entirely
-// (Dibuang -- the row is deleted).
-const KANDIDAT_STATUS_OPTIONS = ["Hold", "Dibuang"];
-
+// There's no manual Hold/Dibuang choice anymore either: whether a
+// candidate shows up on "Data Peserta Wawancara" is derived automatically
+// from hasil_interview once it's set -- Recommended/Considered are kept,
+// Not Recommended stays only in this list.
 const emptyScores = { komunikasi: 3, penampilan: 3, pengetahuan_pekerjaan: 3, keterampilan: 3, pengalaman_kerja: 3 };
+
+function totalNilai(scores) {
+  return KRITERIA_PENILAIAN.reduce((sum, k) => sum + (Number(scores[k.key]) || 0) * (k.bobot ?? 1), 0);
+}
 
 export default function InterviewList() {
   const navigate = useNavigate();
@@ -31,7 +34,6 @@ export default function InterviewList() {
   const [editScores, setEditScores] = useState(emptyScores);
   const [editHasil, setEditHasil] = useState("");
   const [editBanding, setEditBanding] = useState("");
-  const [editKandidatStatus, setEditKandidatStatus] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
 
   const load = useCallback(() => {
@@ -61,30 +63,17 @@ export default function InterviewList() {
     });
     setEditHasil(row.hasil_interview || "");
     setEditBanding(row.keterangan_banding === "-" ? "" : row.keterangan_banding || "");
-    setEditKandidatStatus(row.kandidat_status === "Hold" ? "Hold" : "");
   }
 
   async function saveEdit() {
     setSavingEdit(true);
     try {
-      if (editKandidatStatus === "Dibuang") {
-        const ok = window.confirm(
-          `Buang data ${editRow.nama_kandidat}? Data interview ini akan dihapus permanen dan tidak akan muncul di Data Peserta Wawancara.`
-        );
-        if (!ok) {
-          setSavingEdit(false);
-          return;
-        }
-        await interviewApi.remove(editRow.id);
-      } else {
-        await interviewApi.update(editRow.id, {
-          ...editScores,
-          hasil_interview: editHasil || null,
-          status: editHasil || "Pending",
-          keterangan_banding: editBanding || "-",
-          kandidat_status: editKandidatStatus === "Hold" ? "Hold" : "Pending",
-        });
-      }
+      await interviewApi.update(editRow.id, {
+        ...editScores,
+        hasil_interview: editHasil || null,
+        status: editHasil || "Pending",
+        keterangan_banding: editBanding || "-",
+      });
       setEditRow(null);
       load();
     } finally {
@@ -96,12 +85,8 @@ export default function InterviewList() {
     { key: "tanggal_interview", header: "Tanggal Interview", render: (r) => formatDate(r.tanggal_interview) },
     { key: "nama_kandidat", header: "Nama Kandidat" },
     { key: "posisi_yang_dilamar", header: "Posisi Dilamar" },
+    { key: "jurusan", header: "Jurusan", render: (r) => r.jurusan || "-" },
     { key: "hasil_interview", header: "Hasil Interview", render: (r) => <StatusBadge status={r.hasil_interview || "-"} /> },
-    {
-      key: "kandidat_status",
-      header: "Status Peserta",
-      render: (r) => (r.kandidat_status === "Hold" ? <StatusBadge status="Hold" /> : <span className="text-ink-300">Belum diputuskan</span>),
-    },
     {
       key: "turnover",
       header: "Turnover Terkait",
@@ -114,7 +99,7 @@ export default function InterviewList() {
       render: (r) => (
         <div className="flex items-center gap-1.5">
           <ActionIconButton icon={Info} onClick={() => openDetail(r)} variant="info" title="Lihat detail" />
-          <ActionIconButton icon={Pencil} onClick={() => openEdit(r)} variant="edit" title="Edit nilai, hasil & status peserta" />
+          <ActionIconButton icon={Pencil} onClick={() => openEdit(r)} variant="edit" title="Edit nilai & hasil interview" />
         </div>
       ),
     },
@@ -124,7 +109,7 @@ export default function InterviewList() {
     <div>
       <PageHeader
         title="Recruitment - Interview Harian"
-        subtitle="Interview bisa dilakukan kapan saja, tidak perlu menunggu adanya turnover. Keputusan hired dilakukan dari layar Turnover."
+        subtitle="Interview bisa dilakukan kapan saja, tidak perlu menunggu adanya turnover. Kandidat Recommended/Considered otomatis masuk ke Data Peserta Wawancara; Not Recommended hanya tersimpan di sini."
         action={
           <PrimaryButton onClick={() => navigate("/recruitment/interview/new")}>
             <Plus size={15} /> Tambah Interview Baru
@@ -172,16 +157,7 @@ export default function InterviewList() {
               <DetailField label="Tanggal Lahir" value={active.tanggal_lahir} />
               <DetailField label="Info Lowongan" value={active.info_loker} />
               <DetailField label="Referensi" value={active.keterangan_referensi} />
-              <DetailField
-                label="Total Nilai"
-                value={
-                  (active.komunikasi || 0) +
-                  (active.penampilan || 0) +
-                  (active.pengetahuan_pekerjaan || 0) +
-                  (active.keterampilan || 0) +
-                  (active.pengalaman_kerja || 0)
-                }
-              />
+              <DetailField label="Total Nilai" value={totalNilai(active)} />
               <DetailField label="Ajukan Banding" value={active.keterangan_banding} />
               <DetailField label="Turnover Terkait" value={active.turnover?.nomor_turnover} />
             </div>
@@ -189,10 +165,10 @@ export default function InterviewList() {
               <p className="text-[11px] font-medium text-ink-500 uppercase mb-1">Keterangan Interview</p>
               <p className="text-ink-900">{active.keterangan_interview || "-"}</p>
             </div>
-            {active.kandidat_status === "Hold" && !active.turnover_id && (
+            {(active.hasil_interview === "Recommended" || active.hasil_interview === "Considered") && !active.turnover_id && (
               <div className="flex items-center gap-2 text-sm text-ink-700 bg-surface-panel border border-surface-border px-3 py-2.5">
-                <Archive size={16} className="text-primary shrink-0" />
-                Kandidat disimpan di pool "Data Peserta Wawancara" -- bisa diajukan ke turnover manapun yang
+                <Info size={16} className="text-primary shrink-0" />
+                Kandidat ini otomatis tampil di "Data Peserta Wawancara" -- bisa diajukan ke turnover manapun yang
                 cocok dari layar Turnover.
               </div>
             )}
@@ -200,7 +176,7 @@ export default function InterviewList() {
         )}
       </Modal>
 
-      {/* Edit: penilaian, hasil interview & keputusan hold/dibuang */}
+      {/* Edit: penilaian & hasil interview */}
       <Modal open={!!editRow} onClose={() => setEditRow(null)} title="Edit Nilai & Hasil Interview" width="max-w-lg">
         {editRow && (
           <div className="space-y-5">
@@ -241,14 +217,16 @@ export default function InterviewList() {
                   </tbody>
                 </table>
               </div>
-              <p className="text-right text-sm font-semibold text-ink-900 mt-2">
-                Total Nilai: {KRITERIA_PENILAIAN.reduce((sum, k) => sum + (Number(editScores[k.key]) || 0) * (k.bobot ?? 1), 0)}
-              </p>
+              <p className="text-right text-sm font-semibold text-ink-900 mt-2">Total Nilai: {totalNilai(editScores)}</p>
             </div>
 
             <div>
               <label className="block text-xs font-medium text-ink-500 mb-1">Hasil Interview</label>
               <SelectInput value={editHasil} onChange={(e) => setEditHasil(e.target.value)} options={HASIL_INTERVIEW_LIST} />
+              <p className="text-[11px] text-ink-300 mt-1">
+                <b>Recommended</b>/<b>Considered</b>: otomatis masuk ke "Data Peserta Wawancara".{" "}
+                <b>Not Recommended</b>: tetap tersimpan di Interview Harian saja.
+              </p>
             </div>
             <div>
               <label className="block text-xs font-medium text-ink-500 mb-1">Ajukan Banding</label>
@@ -258,24 +236,10 @@ export default function InterviewList() {
                 placeholder="Keterangan banding (kosongkan jika tidak ada)"
               />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-ink-500 mb-1">Status Peserta</label>
-              <SelectInput
-                value={editKandidatStatus}
-                onChange={(e) => setEditKandidatStatus(e.target.value)}
-                options={KANDIDAT_STATUS_OPTIONS}
-                placeholder="Belum diputuskan"
-              />
-              <p className="text-[11px] text-ink-300 mt-1">
-                <b>Hold</b>: kandidat disimpan ke "Data Peserta Wawancara" untuk kemungkinan diajukan ke turnover.{" "}
-                <b>Dibuang</b>: data kandidat ini akan dihapus permanen.
-              </p>
-            </div>
             <div className="flex justify-end gap-2 pt-2">
               <GhostButton onClick={() => setEditRow(null)}>Batal</GhostButton>
               <PrimaryButton onClick={saveEdit} disabled={savingEdit}>
-                {editKandidatStatus === "Dibuang" ? <Trash2 size={14} /> : <Save size={14} />}
-                {savingEdit ? "Menyimpan..." : editKandidatStatus === "Dibuang" ? "Buang Data" : "Simpan"}
+                <Save size={14} /> {savingEdit ? "Menyimpan..." : "Simpan"}
               </PrimaryButton>
             </div>
           </div>

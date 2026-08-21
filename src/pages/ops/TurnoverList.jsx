@@ -10,6 +10,7 @@ export default function OpsTurnoverList() {
       moduleLabel="Operasional"
       variant="area"
       editable={false}
+      showCandidates
     />
   );
 }

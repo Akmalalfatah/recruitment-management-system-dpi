@@ -115,29 +115,43 @@ export const interviewApi = {
     if (error) throw error;
     return data;
   },
-  // "Data Peserta Wawancara": candidates on Hold, regardless of whether
-  // they're currently assigned to a turnover or already Hired there.
+  // "Data Peserta Wawancara": whether a candidate shows up here is derived
+  // automatically from hasil_interview -- Recommended/Considered are kept,
+  // Not Recommended stays only in Interview Harian. No manual choice.
   async listHold() {
     if (!isSupabaseConfigured) return mockAdapter.listHoldInterviews();
     const { data, error } = await supabase
       .from("interview_harian")
       .select("*, turnover:turnover(*)")
-      .eq("kandidat_status", "Hold")
+      .in("hasil_interview", ["Recommended", "Considered"])
       .order("tanggal_interview", { ascending: false });
     if (error) throw error;
     return data;
   },
-  // Candidates on Hold, not yet assigned to any turnover -- the pool
-  // Recruitment picks from when "memilih peserta yang diajukan" for a
-  // turnover.
+  // Candidates not yet assigned to any turnover -- the pool Recruitment
+  // picks from when "memilih peserta yang diajukan" for a turnover. A
+  // Hired candidate always keeps turnover_id set to their winning
+  // turnover, so they naturally never appear here.
   async listAvailablePool() {
     if (!isSupabaseConfigured) return mockAdapter.listAvailablePool();
     const { data, error } = await supabase
       .from("interview_harian")
       .select("*")
-      .eq("kandidat_status", "Hold")
+      .in("hasil_interview", ["Recommended", "Considered"])
       .is("turnover_id", null)
       .order("tanggal_interview", { ascending: false });
+    if (error) throw error;
+    return data;
+  },
+  // "Riwayat pengajuan": every turnover this candidate has ever been
+  // proposed to, most recent first.
+  async history(interviewId) {
+    if (!isSupabaseConfigured) return mockAdapter.listInterviewHistory(interviewId);
+    const { data, error } = await supabase
+      .from("interview_turnover_log")
+      .select("*, turnover:turnover(*)")
+      .eq("interview_harian_id", interviewId)
+      .order("assigned_at", { ascending: false });
     if (error) throw error;
     return data;
   },

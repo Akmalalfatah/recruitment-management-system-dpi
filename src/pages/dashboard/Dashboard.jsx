@@ -51,14 +51,19 @@ function roleDashboard(role, data) {
 }
 
 const pending = (arr) => arr.filter((x) => x.status === "Pending").length;
+// Turnover no longer uses Pending/Accepted -- "belum selesai" is anything
+// short of the final "Terpilih" stage, and "Terpilih" itself is the
+// completed/hired outcome.
+const turnoverOpen = (arr) => arr.filter((t) => t.status !== "Terpilih").length;
+const turnoverDone = (arr) => arr.filter((t) => t.status === "Terpilih").length;
 
 function OpsDashboard({ data }) {
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard label="ERS Pending" value={pending(data.ers)} />
-        <StatCard label="Turnover Pending" value={pending(data.turnover)} accent="secondary" />
-        <StatCard label="Turnover Accepted" value={data.turnover.filter((t) => t.status === "Accepted").length} accent="green" />
+        <StatCard label="Turnover Masih Proses" value={turnoverOpen(data.turnover)} accent="secondary" />
+        <StatCard label="Turnover Terpilih" value={turnoverDone(data.turnover)} accent="green" />
         <StatCard label="Total Turnover" value={data.turnover.length} accent="blue" />
       </div>
       <PendingTable title="Status Pengajuan ERS" rows={data.ers} link="/ops/ers" nameKey="nomor_ers" subKey="area_penempatan" />
@@ -70,8 +75,8 @@ function ErDashboard({ data }) {
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <StatCard label="Turnover Pending" value={pending(data.turnover)} />
-        <StatCard label="Turnover Accepted" value={data.turnover.filter((t) => t.status === "Accepted").length} accent="green" />
+        <StatCard label="Turnover Masih Proses" value={turnoverOpen(data.turnover)} />
+        <StatCard label="Turnover Terpilih" value={turnoverDone(data.turnover)} accent="green" />
         <StatCard label="Total Turnover & PKWT" value={data.turnover.length} accent="blue" />
       </div>
       <PendingTable title="Data Turnover Terbaru" rows={data.turnover} link="/er/turnover" nameKey="nomor_turnover" subKey="jabatan" />
@@ -86,7 +91,7 @@ function RecruitmentDashboard({ data }) {
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <StatCard label="ERS Menunggu Review" value={pending(data.ers)} accent="secondary" />
-        <StatCard label="Turnover Masih Proses" value={data.turnover.filter((t) => t.status === "Pending").length} />
+        <StatCard label="Turnover Masih Proses" value={turnoverOpen(data.turnover)} />
         <StatCard label="Interview Harian" value={data.interviews.length} accent="secondary" />
         <StatCard label="Kandidat Direkomendasikan" value={data.interviews.filter((i) => i.hasil_interview === "Recommended").length} accent="green" />
         <StatCard label="Interview Hari Ini" value={todayInterviews.length} accent="blue" />
@@ -100,7 +105,7 @@ function TrainingDashboard({ data }) {
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <StatCard label="Kandidat Hired" value={data.turnover.filter((t) => t.status === "Accepted").length} accent="green" />
+        <StatCard label="Kandidat Hired" value={turnoverDone(data.turnover)} accent="green" />
         <StatCard label="ID Card Pending" value={pending(data.idcards)} accent="secondary" />
         <StatCard label="ID Card Selesai" value={data.idcards.filter((c) => c.status === "Completed").length} accent="blue" />
       </div>
@@ -113,8 +118,8 @@ function PayrollDashboard({ data }) {
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <StatCard label="Turnover Pending" value={pending(data.turnover)} />
-        <StatCard label="Turnover Accepted" value={data.turnover.filter((t) => t.status === "Accepted").length} accent="green" />
+        <StatCard label="Turnover Masih Proses" value={turnoverOpen(data.turnover)} />
+        <StatCard label="Turnover Terpilih" value={turnoverDone(data.turnover)} accent="green" />
         <StatCard label="Total Data Turnover" value={data.turnover.length} accent="blue" />
       </div>
       <PendingTable title="Data Turnover Terbaru" rows={data.turnover} link="/payroll/turnover" nameKey="nomor_turnover" subKey="jabatan" />
