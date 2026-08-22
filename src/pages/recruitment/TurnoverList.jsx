@@ -8,12 +8,10 @@ import StatusBadge from "../../components/common/StatusBadge";
 import Modal from "../../components/common/Modal";
 import { exportTurnoverExcel } from "../../utils/exportExcel";
 import { formatDate } from "../../utils/formatDate";
-import { ALASAN_KELUAR_LIST, TURNOVER_STATUS_LIST, TURNOVER_STATUS_TERPILIH } from "../../lib/constants";
+import { TURNOVER_STATUS_LIST, TURNOVER_STATUS_TERPILIH } from "../../lib/constants";
 
 const emptyDraft = {
   status: "",
-  alasan_keluar: "",
-  tanggal_keluar: "",
   nama_rekruter: "",
   nama_koordinator: "",
   tgl_kirim_kandidat: "",
@@ -74,8 +72,6 @@ export default function RecruitmentTurnoverList() {
     setShowPicker(false);
     setDraft({
       status: row.status || "",
-      alasan_keluar: row.alasan_keluar || "",
-      tanggal_keluar: row.tanggal_keluar || "",
       nama_rekruter: row.nama_rekruter || "",
       nama_koordinator: row.nama_koordinator || "",
       tgl_kirim_kandidat: row.tgl_kirim_kandidat || "",
@@ -206,6 +202,19 @@ export default function RecruitmentTurnoverList() {
               <StatusBadge status={active.status} />
             </div>
 
+            {/* Diambil otomatis dari ERS sumbernya -- sudah diisi OPS waktu
+                bikin ERS, jadi tidak perlu diisi ulang manual di sini. */}
+            <div className="grid grid-cols-2 gap-4 bg-surface-100/60 border border-surface-border px-3 py-2.5 text-xs">
+              <div>
+                <p className="text-ink-500 font-medium mb-0.5">Alasan Keluar</p>
+                <p className="text-ink-900 font-semibold">{active.alasan_keluar || "-"}</p>
+              </div>
+              <div>
+                <p className="text-ink-500 font-medium mb-0.5">Tanggal Keluar</p>
+                <p className="text-ink-900 font-semibold">{formatDate(active.tanggal_keluar) || "-"}</p>
+              </div>
+            </div>
+
             {isClosed && (
               <div className="flex items-center gap-2 text-sm text-green-700 bg-status-green/10 border border-status-green/30 px-3 py-2.5">
                 <CheckCircle2 size={16} className="shrink-0" />
@@ -228,18 +237,6 @@ export default function RecruitmentTurnoverList() {
                   <p className="text-[11px] text-ink-300 mt-1">
                     "Terpilih" otomatis ter-set saat kandidat ditandai Hired -- tidak perlu dipilih manual.
                   </p>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-ink-500 mb-1">Alasan Keluar</label>
-                  <SelectInput
-                    value={draft.alasan_keluar}
-                    onChange={(e) => setDraft((d) => ({ ...d, alasan_keluar: e.target.value }))}
-                    options={ALASAN_KELUAR_LIST}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-ink-500 mb-1">Tanggal Keluar</label>
-                  <TextInput type="date" value={draft.tanggal_keluar} onChange={(e) => setDraft((d) => ({ ...d, tanggal_keluar: e.target.value }))} />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-ink-500 mb-1">Nama Rekruter</label>
