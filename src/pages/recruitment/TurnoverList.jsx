@@ -233,9 +233,12 @@ export default function RecruitmentTurnoverList() {
                     value={draft.status}
                     onChange={(e) => setDraft((d) => ({ ...d, status: e.target.value }))}
                     options={TURNOVER_STATUS_LIST}
+                    disabled={isClosed}
                   />
                   <p className="text-[11px] text-ink-300 mt-1">
-                    "Terpilih" otomatis ter-set saat kandidat ditandai Hired -- tidak perlu dipilih manual.
+                    {isClosed
+                      ? "Turnover ini sudah Terpilih (selesai) -- status tidak bisa diubah lagi."
+                      : '"Terpilih" otomatis ter-set saat kandidat ditandai Hired -- tidak perlu dipilih manual.'}
                   </p>
                 </div>
                 <div>

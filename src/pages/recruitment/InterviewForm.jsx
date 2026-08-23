@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { interviewApi } from "../../lib/db";
@@ -23,38 +23,11 @@ const emptyForm = {
 export default function InterviewForm() {
   const navigate = useNavigate();
   const [form, setForm] = useState(emptyForm);
-  const [holdCandidates, setHoldCandidates] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    // Interview is now fully independent of turnover -- it can be done any
-    // time. We only offer a way to reuse a previously-held candidate's
-    // personal data if they're interviewing again for a different role.
-    interviewApi.listHold().then(setHoldCandidates).catch(() => setHoldCandidates([]));
-  }, []);
-
   function set(key, value) {
     setForm((f) => ({ ...f, [key]: value }));
-  }
-
-  // Reuse a candidate from the talent pool ("Data Peserta Wawancara") —
-  // someone already interviewed before and kept on Hold.
-  function handleReuseCandidate(candidateId) {
-    const c = holdCandidates.find((x) => x.id === candidateId);
-    if (!c) return;
-    setForm((f) => ({
-      ...f,
-      nama_kandidat: c.nama_kandidat || f.nama_kandidat,
-      pendidikan: c.pendidikan || f.pendidikan,
-      jurusan: c.jurusan || f.jurusan,
-      agama: c.agama || f.agama,
-      info_loker: c.info_loker || f.info_loker,
-      tanggal_lahir: c.tanggal_lahir || f.tanggal_lahir,
-      domisili: c.domisili || f.domisili,
-      no_hp: c.no_hp || f.no_hp,
-      keterangan_referensi: c.keterangan_referensi || f.keterangan_referensi,
-    }));
   }
 
   async function handleSubmit(e) {
@@ -95,28 +68,6 @@ export default function InterviewForm() {
           lewat aksi pensil pada Daftar Interview -- kandidat dengan hasil Recommended/Considered otomatis muncul di
           Data Peserta Wawancara.
         </p>
-
-        {holdCandidates.length > 0 && (
-          <div className="mb-5 bg-primary-50 border border-primary-100 px-4 py-3">
-            <Field
-              label="Pilih dari Data Peserta Wawancara (opsional)"
-              hint="Isi otomatis data pribadi dari peserta yang pernah diwawancara sebelumnya jika orang yang sama interview ulang untuk posisi lain."
-            >
-              <select
-                onChange={(e) => handleReuseCandidate(e.target.value)}
-                defaultValue=""
-                className="w-full border border-surface-border px-3 py-2 text-sm text-ink-900 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-              >
-                <option value="">Isi manual / kandidat baru...</option>
-                {holdCandidates.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nama_kandidat} — {c.posisi_yang_dilamar || "-"} ({c.hasil_interview || "-"})
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
-        )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
