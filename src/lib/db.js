@@ -118,13 +118,16 @@ export const interviewApi = {
   // "Data Peserta Wawancara": whether a candidate shows up here is derived
   // automatically from hasil_interview -- Recommended/Considered are kept,
   // Not Recommended stays only in Interview Harian. No manual choice.
-  async listHold() {
-    if (!isSupabaseConfigured) return mockAdapter.listHoldInterviews();
-    const { data, error } = await supabase
+  async listHold({ dateFrom, dateTo } = {}) {
+    if (!isSupabaseConfigured) return mockAdapter.listHoldInterviews(range(dateFrom, dateTo));
+    let q = supabase
       .from("interview_harian")
       .select("*, turnover:turnover(*)")
       .in("hasil_interview", ["Recommended", "Considered"])
       .order("tanggal_interview", { ascending: false });
+    if (dateFrom) q = q.gte("tanggal_interview", dateFrom);
+    if (dateTo) q = q.lte("tanggal_interview", dateTo);
+    const { data, error } = await q;
     if (error) throw error;
     return data;
   },

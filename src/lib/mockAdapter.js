@@ -382,11 +382,11 @@ export const mockAdapter = {
   // "Data Peserta Wawancara": whether a candidate shows up here is derived
   // automatically from hasil_interview -- Recommended/Considered are kept,
   // Not Recommended stays only in Interview Harian. No manual choice.
-  async listHoldInterviews() {
+  async listHoldInterviews({ dateFrom, dateTo } = {}) {
     await delay();
     const db = loadDb();
     return db.interview_harian
-      .filter((i) => i.hasil_interview === "Recommended" || i.hasil_interview === "Considered")
+      .filter((i) => (i.hasil_interview === "Recommended" || i.hasil_interview === "Considered") && inRange(i.tanggal_interview, dateFrom, dateTo))
       .map((i) => ({ ...i, turnover: db.turnover.find((t) => t.id === i.turnover_id) || null }))
       .sort((a, b) => (a.tanggal_interview < b.tanggal_interview ? 1 : -1));
   },

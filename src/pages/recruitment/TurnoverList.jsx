@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Users, Download, Pencil, Save, UserCheck, UserMinus, UserPlus, CheckCircle2 } from "lucide-react";
+import { Users, Download, Pencil, Save, UserCheck, UserMinus, UserPlus, CheckCircle2, Search } from "lucide-react";
 import { turnoverApi, interviewApi, idCardApi } from "../../lib/db";
 import { PageHeader, Card, PrimaryButton, GhostButton, TextInput, SelectInput, TextArea, ActionIconButton } from "../../components/common/Ui";
 import DataTable from "../../components/common/DataTable";
@@ -9,6 +9,7 @@ import Modal from "../../components/common/Modal";
 import { exportTurnoverExcel } from "../../utils/exportExcel";
 import { formatDate } from "../../utils/formatDate";
 import { TURNOVER_STATUS_LIST, TURNOVER_STATUS_TERPILIH } from "../../lib/constants";
+import { useAuth } from "../../contexts/AuthContext";
 
 const emptyDraft = {
   status: "",
@@ -21,14 +22,12 @@ const emptyDraft = {
   keterangan_proses: "",
 };
 
-// Recruitment's own Turnover screen. A turnover is now created
-// automatically the instant its ERS is Accepted -- this page is where
-// Recruitment does everything after that: edit process dates, pick which
-// interviewed candidates ("Data Peserta Wawancara" / Hold pool) are
-// proposed for this specific turnover, and mark one of them Hired. Marking
-// someone Hired auto-completes the turnover and kicks off the ID Card
-// process, mirroring the server trigger.
+const emptySourcing = {
+  nama_kandidat: "",
+};
+
 export default function RecruitmentTurnoverList() {
+  const { user } = useAuth();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState({ from: "", to: "" });
@@ -38,6 +37,8 @@ export default function RecruitmentTurnoverList() {
   const [pool, setPool] = useState([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
+  const [showSourcing, setShowSourcing] = useState(false);
+  const [sourcingForm, setSourcingForm] = useState(emptySourcing);
 
   const [draft, setDraft] = useState(emptyDraft);
   const [saving, setSaving] = useState(false);
@@ -70,9 +71,14 @@ export default function RecruitmentTurnoverList() {
   function openDetail(row) {
     setActive(row);
     setShowPicker(false);
+    setShowSourcing(false);
+    setSourcingForm(emptySourcing);
     setDraft({
       status: row.status || "",
-      nama_rekruter: row.nama_rekruter || "",
+      // Belum pernah diisi -> otomatis pakai nama Recruitment yang sedang
+      // login (masih bisa diganti manual kalau turnover ini ditangani
+      // rekruter lain).
+      nama_rekruter: row.nama_rekruter || user?.name || "",
       nama_koordinator: row.nama_koordinator || "",
       tgl_kirim_kandidat: row.tgl_kirim_kandidat || "",
       tgl_interview_user: row.tgl_interview_user || "",
@@ -88,6 +94,8 @@ export default function RecruitmentTurnoverList() {
     setAssigned([]);
     setPool([]);
     setShowPicker(false);
+    setShowSourcing(false);
+    setSourcingForm(emptySourcing);
   }
 
   async function refreshActive() {
@@ -146,12 +154,16 @@ export default function RecruitmentTurnoverList() {
   }
 
   const isClosed = active?.status === TURNOVER_STATUS_TERPILIH;
+  const sourcingMatches = sourcingForm.nama_kandidat.trim()
+    ? pool.filter((candidate) => candidate.nama_kandidat?.toLowerCase().includes(sourcingForm.nama_kandidat.trim().toLowerCase()))
+    : [];
 
   const columns = [
     { key: "area_penempatan", header: "Area Penempatan" },
     { key: "jabatan", header: "Jabatan" },
     { key: "nama_karyawan_existing", header: "Karyawan Lama" },
     { key: "nama_karyawan_baru", header: "Karyawan Baru", render: (r) => r.nama_karyawan_baru || "-" },
+    { key: "nama_rekruter", header: "Nama Rekruter", render: (r) => r.nama_rekruter || "-" },
     { key: "tanggal_permintaan", header: "Tanggal Pengajuan", render: (r) => formatDate(r.tanggal_permintaan) },
     { key: "status", header: "Status", render: (r) => <StatusBadge status={r.status} /> },
     {
@@ -317,16 +329,70 @@ export default function RecruitmentTurnoverList() {
               )}
             </div>
 
-            {/* ---- Pick more candidates from the pool ---- */}
+            {/* ---- Pick more candidates from the pool, or source new ones directly ---- */}
             <div className="pt-4 border-t border-surface-border">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                 <p className="text-xs font-semibold text-ink-700 uppercase tracking-wide">Pilih Peserta dari Data Peserta Wawancara</p>
                 {!isClosed && (
-                  <GhostButton onClick={() => setShowPicker((s) => !s)} className="text-xs px-2.5 py-1.5">
-                    <UserPlus size={13} /> {showPicker ? "Tutup" : "Pilih Peserta"}
-                  </GhostButton>
+                  <div className="flex items-center gap-2">
+                    <GhostButton
+                      onClick={() => {
+                        setShowSourcing((s) => !s);
+                        setShowPicker(false);
+                      }}
+                      className="text-xs px-2.5 py-1.5"
+                    >
+                      <Search size={13} /> {showSourcing ? "Tutup" : "Sourcing"}
+                    </GhostButton>
+                    <GhostButton
+                      onClick={() => {
+                        setShowPicker((s) => !s);
+                        setShowSourcing(false);
+                      }}
+                      className="text-xs px-2.5 py-1.5"
+                    >
+                      <UserPlus size={13} /> {showPicker ? "Tutup" : "Pilih Peserta"}
+                    </GhostButton>
+                  </div>
                 )}
               </div>
+
+              {!isClosed && showSourcing && (
+                <div className="space-y-3 mb-4 bg-surface-panel border border-surface-border px-3 py-3">
+                  <div>
+                    <TextInput
+                      placeholder="Nama Kandidat"
+                      value={sourcingForm.nama_kandidat}
+                      onChange={(e) => setSourcingForm((f) => ({ ...f, nama_kandidat: e.target.value }))}
+                      required
+                    />
+                    {sourcingMatches.length > 0 && (
+                      <div className="mt-2 border border-surface-border divide-y divide-surface-border">
+                        {sourcingMatches.map((candidate) => (
+                          <div key={candidate.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                            <div>
+                              <p className="text-sm font-semibold text-ink-900">{candidate.nama_kandidat}</p>
+                              <p className="text-[11px] text-ink-500">{candidate.posisi_yang_dilamar || "-"}</p>
+                            </div>
+                            <PrimaryButton
+                              type="button"
+                              onClick={() => assignCandidate(candidate.id)}
+                              disabled={busyId === candidate.id}
+                              className="text-xs px-2.5 py-1.5"
+                            >
+                              <UserPlus size={13} /> {busyId === candidate.id ? "Memproses..." : "Ajukan"}
+                            </PrimaryButton>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {sourcingForm.nama_kandidat.trim() && sourcingMatches.length === 0 && (
+                      <p className="mt-2 text-xs text-ink-500">Kandidat dengan nama tersebut tidak ada di pool.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {isClosed ? (
                 <p className="text-xs text-ink-500">Turnover ini sudah selesai, tidak bisa menambah peserta lagi.</p>
               ) : (

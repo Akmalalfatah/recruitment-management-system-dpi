@@ -2,25 +2,25 @@ import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Users, Download, Plus, Pencil, Save, Info } from "lucide-react";
 import { interviewApi } from "../../lib/db";
-import { PageHeader, Card, PrimaryButton, GhostButton, TextInput, SelectInput, ActionIconButton } from "../../components/common/Ui";
+import { PageHeader, Card, PrimaryButton, GhostButton, TextInput, ActionIconButton } from "../../components/common/Ui";
 import DataTable from "../../components/common/DataTable";
 import DateRangeFilter from "../../components/common/DateRangeFilter";
 import StatusBadge from "../../components/common/StatusBadge";
 import Modal from "../../components/common/Modal";
 import { exportToExcel } from "../../utils/exportExcel";
 import { formatDate } from "../../utils/formatDate";
-import { HASIL_INTERVIEW_LIST, KRITERIA_PENILAIAN } from "../../lib/constants";
+import { KRITERIA_PENILAIAN } from "../../lib/constants";
 
-// Interview harian is now independent of turnover -- hiring decisions are
-// made from the Turnover edit screen (Recruitment > Turnover), not here.
-// There's no manual Hold/Dibuang choice anymore either: whether a
-// candidate shows up on "Data Peserta Wawancara" is derived automatically
-// from hasil_interview once it's set -- Recommended/Considered are kept,
-// Not Recommended stays only in this list.
 const emptyScores = { komunikasi: 3, penampilan: 3, pengetahuan_pekerjaan: 3, keterampilan: 3, pengalaman_kerja: 3 };
 
 function totalNilai(scores) {
   return KRITERIA_PENILAIAN.reduce((sum, k) => sum + (Number(scores[k.key]) || 0) * (k.bobot ?? 1), 0);
+}
+
+function computeHasilInterview(total) {
+  if (total >= 350) return "Recommended";
+  if (total >= 250) return "Considered";
+  return "Not Recommended";
 }
 
 export default function InterviewList() {
@@ -32,7 +32,6 @@ export default function InterviewList() {
 
   const [editRow, setEditRow] = useState(null);
   const [editScores, setEditScores] = useState(emptyScores);
-  const [editHasil, setEditHasil] = useState("");
   const [editBanding, setEditBanding] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
 
@@ -61,17 +60,17 @@ export default function InterviewList() {
       keterampilan: row.keterampilan ?? 3,
       pengalaman_kerja: row.pengalaman_kerja ?? 3,
     });
-    setEditHasil(row.hasil_interview || "");
     setEditBanding(row.keterangan_banding === "-" ? "" : row.keterangan_banding || "");
   }
 
   async function saveEdit() {
     setSavingEdit(true);
     try {
+      const hasil = computeHasilInterview(totalNilai(editScores));
       await interviewApi.update(editRow.id, {
         ...editScores,
-        hasil_interview: editHasil || null,
-        status: editHasil || "Pending",
+        hasil_interview: hasil,
+        status: hasil,
         keterangan_banding: editBanding || "-",
       });
       setEditRow(null);
@@ -222,10 +221,12 @@ export default function InterviewList() {
 
             <div>
               <label className="block text-xs font-medium text-ink-500 mb-1">Hasil Interview</label>
-              <SelectInput value={editHasil} onChange={(e) => setEditHasil(e.target.value)} options={HASIL_INTERVIEW_LIST} />
+              <div className="flex items-center gap-2 border border-surface-border bg-surface-panel px-3 py-2">
+                <StatusBadge status={computeHasilInterview(totalNilai(editScores))} />
+                <span className="text-xs text-ink-500">(otomatis dari total nilai)</span>
+              </div>
               <p className="text-[11px] text-ink-300 mt-1">
-                <b>Recommended</b>/<b>Considered</b>: otomatis masuk ke "Data Peserta Wawancara".{" "}
-                <b>Not Recommended</b>: tetap tersimpan di Interview Harian saja.
+                <b>Recommended</b> &ge;350, <b>Considered</b> 250-349, <b>Not Recommended</b> &lt;250
               </p>
             </div>
             <div>

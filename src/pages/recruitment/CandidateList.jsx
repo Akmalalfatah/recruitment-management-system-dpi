@@ -3,6 +3,7 @@ import { Users2, Download, Info, History } from "lucide-react";
 import { interviewApi } from "../../lib/db";
 import { PageHeader, Card, ActionIconButton } from "../../components/common/Ui";
 import DataTable from "../../components/common/DataTable";
+import DateRangeFilter from "../../components/common/DateRangeFilter";
 import StatusBadge from "../../components/common/StatusBadge";
 import Modal from "../../components/common/Modal";
 import { exportToExcel } from "../../utils/exportExcel";
@@ -18,14 +19,15 @@ export default function CandidateList() {
   const [active, setActive] = useState(null);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [range, setRange] = useState({ from: "", to: "" });
 
   const load = useCallback(() => {
     setLoading(true);
     interviewApi
-      .listHold()
+        .listHold({ dateFrom: range.from, dateTo: range.to })
       .then(setRows)
       .finally(() => setLoading(false));
-  }, []);
+      }, [range]);
 
   useEffect(() => {
     load();
@@ -81,12 +83,20 @@ export default function CandidateList() {
           <div className="flex items-center gap-2 text-ink-700 font-semibold text-sm">
             <Users2 size={16} className="text-primary" /> Daftar Peserta Wawancara
           </div>
-          <button
-            onClick={() => exportToExcel(rows.map((r) => ({ ...r, turnover: undefined })), "Data_Peserta_Wawancara")}
-            className="flex items-center gap-1.5 text-xs font-semibold text-primary border border-primary/30 bg-primary/5 hover:bg-primary/10 px-3 py-1.5 "
-          >
-            <Download size={13} /> Ekspor Excel
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <DateRangeFilter from={range.from} to={range.to} onChange={setRange} />
+            <button
+              onClick={() =>
+                exportToExcel(
+                  rows.map((r) => ({ ...r, turnover: undefined })),
+                  "Data_Peserta_Wawancara"
+                )
+              }
+              className="flex items-center gap-1.5 text-xs font-semibold text-primary border border-primary/30 bg-primary/5 hover:bg-primary/10 px-3 py-1.5 "
+            >
+              <Download size={13} /> Ekspor Excel
+            </button>
+          </div>
         </div>
         {loading ? (
           <p className="text-sm text-ink-500 py-6 text-center">Memuat data...</p>
