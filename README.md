@@ -16,19 +16,19 @@ npm run dev
 
 Karena `VITE_SUPABASE_URL` belum diisi, aplikasi otomatis berjalan dalam **mode demo**: seluruh data (termasuk notifikasi) disimpan di `localStorage` browser Anda. Login menggunakan salah satu akun berikut (juga ditampilkan langsung di halaman login):
 
-| Role | Email | Password |
-|---|---|---|
-| Akmal | akmal@dpi.co.id | akmal123 |
-| Dhio | dhio@dpi.co.id | dhio123 |
-| Yusuf | yusuf@dpi.co.id | yusuf123 |
-| Super Admin | admin@dpi.co.id | admin123 |
-| OPS | ops@dpi.co.id | ops123 |
-| Employee Relation | er@dpi.co.id | er123 |
-| Recruitment | recruitment@dpi.co.id | recruitment123 |
-| Training | training@dpi.co.id | training123 |
-| Payroll | payroll@dpi.co.id | payroll123 |
+| Role              | Email                 | Password       |
+| ----------------- | --------------------- | -------------- |
+| Akmal             | akmal@dpi.co.id       | akmal123       |
+| Dhio              | dhio@dpi.co.id        | dhio123        |
+| Yusuf             | yusuf@dpi.co.id       | yusuf123       |
+| Super Admin       | admin@dpi.co.id       | admin123       |
+| OPS               | ops@dpi.co.id         | ops123         |
+| Employee Relation | er@dpi.co.id          | er123          |
+| Recruitment       | recruitment@dpi.co.id | recruitment123 |
+| Training          | training@dpi.co.id    | training123    |
+| Payroll           | payroll@dpi.co.id     | payroll123     |
 
-Mode demo ini murni untuk *preview* dan hanya tersimpan di browser Anda sendiri — data tidak dibagikan antar-perangkat/akun. Begitu Anda mengisi kredensial Supabase (langkah 2), aplikasi **otomatis beralih** memakai database sungguhan tanpa perlu ubah kode apa pun.
+Mode demo ini murni untuk _preview_ dan hanya tersimpan di browser Anda sendiri — data tidak dibagikan antar-perangkat/akun. Begitu Anda mengisi kredensial Supabase (langkah 2), aplikasi **otomatis beralih** memakai database sungguhan tanpa perlu ubah kode apa pun.
 
 ## 2. Menghubungkan ke Supabase (supaya semuanya dinamis)
 
@@ -57,13 +57,14 @@ Ini bagian yang sebelumnya terasa statis — sekarang caranya:
 
 **Menghapus akun**: hapus user-nya di **Authentication → Users**. Baris di tabel `users` ikut terhapus otomatis (relasi `on delete cascade`), jadi tidak ada langkah tambahan.
 
-Karena `AuthContext` (`src/contexts/AuthContext.jsx`) selalu mengambil sesi & profil langsung dari Supabase setiap kali dibuka, **setiap akun yang Anda tambah/hapus di atas langsung "sync" ke aplikasi** — tidak perlu redeploy atau ubah kode.
+Karena `AuthContext` (`src/contexts/AuthContext.jsx`) mengambil sesi & profil langsung dari Supabase setiap kali dibuka, **setiap akun yang Anda tambah/hapus di atas langsung "sync" ke aplikasi** — tidak perlu redeploy atau ubah kode.
 
 > Ingin proses tambah-akun ini punya halaman UI sendiri di dalam aplikasi (bukan lewat dashboard Supabase)? Itu bisa ditambahkan sebagai halaman "Kelola Akun" khusus Super Admin — beri tahu saya kalau ini yang Anda mau, karena butuh sedikit pertimbangan keamanan tambahan (pembuatan user baru dari browser butuh kunci khusus yang tidak boleh sekadar ditaruh di kode frontend).
 
 ### c. Notifikasi sekarang otomatis, bukan lagi hardcode
 
 `schema.sql` menambahkan 5 trigger database yang otomatis membuat notifikasi baru setiap kali:
+
 - ERS baru diajukan (OPS)
 - Status turnover berubah jadi Accepted/Rejected
 - Interview baru dijadwalkan (Recruitment)
@@ -115,5 +116,5 @@ supabase/
 - Autentikasi: Supabase Auth email/password sederhana (tanpa SSO/MFA), sesuai kebutuhan proyek.
 - Row Level Security per role sudah disiapkan di `supabase/schema.sql`; silakan disesuaikan lagi jika kebutuhan akses berkembang.
 - Foto karyawan untuk ID Card disimpan langsung sebagai data (base64) di kolom `id_card_process.photo_data_url`, dibaca ulang oleh browser untuk digambar ke kanvas ID Card — tidak perlu bucket storage terpisah untuk foto ini.
-- Master data `jabatan` masih *fixed list* di `src/lib/constants.js` (bukan tabel database), sesuai keputusan awal proyek, agar tetap simpel.
+- Master data `jabatan` masih _fixed list_ di `src/lib/constants.js` (bukan tabel database), sesuai keputusan awal proyek, agar tetap simpel.
 - Menambah/menghapus akun login saat ini dilakukan lewat dashboard Supabase (lihat langkah 2b) — aplikasi langsung membaca perubahan itu secara live tanpa perlu deploy ulang.
