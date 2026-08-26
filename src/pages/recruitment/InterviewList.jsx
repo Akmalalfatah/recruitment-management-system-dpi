@@ -11,12 +11,23 @@ import { exportToExcel } from "../../utils/exportExcel";
 import { formatDate } from "../../utils/formatDate";
 import { KRITERIA_PENILAIAN } from "../../lib/constants";
 
+// Interview harian is now independent of turnover -- hiring decisions are
+// made from the Turnover edit screen (Recruitment > Turnover), not here.
+// There's no manual Hold/Dibuang choice anymore either: whether a
+// candidate shows up on "Data Peserta Wawancara" is derived automatically
+// from hasil_interview once it's set -- Recommended/Considered are kept,
+// Not Recommended stays only in this list.
 const emptyScores = { komunikasi: 3, penampilan: 3, pengetahuan_pekerjaan: 3, keterampilan: 3, pengalaman_kerja: 3 };
 
 function totalNilai(scores) {
   return KRITERIA_PENILAIAN.reduce((sum, k) => sum + (Number(scores[k.key]) || 0) * (k.bobot ?? 1), 0);
 }
 
+// Hasil interview sekarang ditentukan otomatis dari total nilai (5 aspek x
+// bobot 20, skala 100-500), bukan dipilih manual lagi:
+//   >= 350        -> Recommended
+//   250 - 349     -> Considered
+//   < 250         -> Not Recommended
 function computeHasilInterview(total) {
   if (total >= 350) return "Recommended";
   if (total >= 250) return "Considered";
@@ -108,7 +119,7 @@ export default function InterviewList() {
     <div>
       <PageHeader
         title="Recruitment - Interview Harian"
-        subtitle="Interview bisa dilakukan kapan saja, tidak perlu menunggu adanya turnover. Kandidat Recommended/Considered otomatis masuk ke Data Peserta Wawancara; Not Recommended hanya tersimpan di sini."
+        subtitle="Catat dan nilai hasil interview kandidat."
         action={
           <PrimaryButton onClick={() => navigate("/recruitment/interview/new")}>
             <Plus size={15} /> Tambah Interview Baru
@@ -226,7 +237,9 @@ export default function InterviewList() {
                 <span className="text-xs text-ink-500">(otomatis dari total nilai)</span>
               </div>
               <p className="text-[11px] text-ink-300 mt-1">
-                <b>Recommended</b> &ge;350, <b>Considered</b> 250-349, <b>Not Recommended</b> &lt;250
+                <b>Recommended</b> &ge;350, <b>Considered</b> 250-349, <b>Not Recommended</b> &lt;250 -- otomatis
+                mengikuti skala penilaian di atas, tidak dipilih manual. Recommended/Considered otomatis masuk ke
+                "Data Peserta Wawancara".
               </p>
             </div>
             <div>

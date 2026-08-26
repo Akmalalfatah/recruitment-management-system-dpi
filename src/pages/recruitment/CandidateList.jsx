@@ -3,7 +3,6 @@ import { Users2, Download, Info, History } from "lucide-react";
 import { interviewApi } from "../../lib/db";
 import { PageHeader, Card, ActionIconButton } from "../../components/common/Ui";
 import DataTable from "../../components/common/DataTable";
-import DateRangeFilter from "../../components/common/DateRangeFilter";
 import StatusBadge from "../../components/common/StatusBadge";
 import Modal from "../../components/common/Modal";
 import { exportToExcel } from "../../utils/exportExcel";
@@ -19,19 +18,25 @@ export default function CandidateList() {
   const [active, setActive] = useState(null);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [range, setRange] = useState({ from: "", to: "" });
+  const [monthFilter, setMonthFilter] = useState(""); // "" = semua bulan, format "YYYY-MM"
 
   const load = useCallback(() => {
     setLoading(true);
     interviewApi
-        .listHold({ dateFrom: range.from, dateTo: range.to })
+      .listHold()
       .then(setRows)
       .finally(() => setLoading(false));
-      }, [range]);
+  }, []);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Rekap bulanan: filter di sisi klien berdasarkan tanggal interview,
+  // dipakai baik untuk tabel yang ditampilkan maupun untuk ekspor Excel.
+  const filteredRows = monthFilter
+    ? rows.filter((r) => (r.tanggal_interview || "").startsWith(monthFilter))
+    : rows;
 
   // Same weighted formula as Interview Harian's edit screen -- keeps
   // "Total Nilai" consistent everywhere it's shown.
@@ -76,7 +81,7 @@ export default function CandidateList() {
     <div>
       <PageHeader
         title="Recruitment - Data Peserta Wawancara"
-        subtitle="Kandidat dengan hasil Recommended/Considered otomatis tampil di sini -- bisa diajukan ke turnover mana pun (kalau belum Hired) dari layar Turnover."
+        subtitle="Daftar kandidat hasil interview yang layak dipertimbangkan."
       />
       <Card className="p-4">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
@@ -84,24 +89,41 @@ export default function CandidateList() {
             <Users2 size={16} className="text-primary" /> Daftar Peserta Wawancara
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <DateRangeFilter from={range.from} to={range.to} onChange={setRange} />
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-ink-500 font-medium">Rekap Bulan</label>
+              <input
+                type="month"
+                value={monthFilter}
+                onChange={(e) => setMonthFilter(e.target.value)}
+                className="border border-surface-border px-2.5 py-1.5 text-xs text-ink-900 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+              />
+              {monthFilter && (
+                <button
+                  type="button"
+                  onClick={() => setMonthFilter("")}
+                  className="text-xs text-ink-500 hover:text-primary underline"
+                >
+                  Semua Bulan
+                </button>
+              )}
+            </div>
             <button
               onClick={() =>
                 exportToExcel(
-                  rows.map((r) => ({ ...r, turnover: undefined })),
-                  "Data_Peserta_Wawancara"
+                  filteredRows.map((r) => ({ ...r, turnover: undefined })),
+                  monthFilter ? `Data_Peserta_Wawancara_${monthFilter}` : "Data_Peserta_Wawancara"
                 )
               }
               className="flex items-center gap-1.5 text-xs font-semibold text-primary border border-primary/30 bg-primary/5 hover:bg-primary/10 px-3 py-1.5 "
             >
-              <Download size={13} /> Ekspor Excel
+              <Download size={13} /> {monthFilter ? "Ekspor Rekap Bulan Ini" : "Ekspor Excel"}
             </button>
           </div>
         </div>
         {loading ? (
           <p className="text-sm text-ink-500 py-6 text-center">Memuat data...</p>
         ) : (
-          <DataTable columns={columns} rows={rows} emptyLabel="Belum ada peserta dengan hasil Recommended/Considered." />
+          <DataTable columns={columns} rows={filteredRows} emptyLabel="Belum ada peserta dengan hasil Recommended/Considered." />
         )}
       </Card>
 
