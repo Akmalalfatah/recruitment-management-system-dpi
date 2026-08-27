@@ -126,11 +126,11 @@ export default function ErsForm() {
                 />
               </Field>
 
-              <Field label="Usia">
+              <Field label="Usia Max">
                 <TextInput
                   value={form.usia}
                   onChange={(e) => set("usia", e.target.value)}
-                  placeholder="cth. MAX. 25 TAHUN"
+                  placeholder="cth. 25"
                 />
               </Field>
               <Field label="Status">
