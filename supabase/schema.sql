@@ -155,6 +155,36 @@
 --      DITERIMA" signature columns on the printed ERS PDF, which used to
 --      always render blank except Pemohon.
 --
+-- v10 changes (this update — fixes gaps found while wiring up new features):
+--   1. `turnover.status` was still typed `doc_status` ('Pending'/'Accepted'/
+--      'Rejected'), but the frontend has moved to a 7-stage pipeline
+--      ("Belum Kirim" ... "Terpilih", see TURNOVER_STATUS_LIST in
+--      src/lib/constants.js) — every real save of a turnover's status
+--      would have failed with an invalid-enum-value error. New dedicated
+--      `turnover_status` enum, `turnover.status` now uses it, default
+--      'Belum Kirim'.
+--   2. There was no trigger that actually creates a turnover when an ERS
+--      is Accepted, even though the whole app (OPS's read-only turnover
+--      screen, Recruitment's ERS screen) assumes this already happens —
+--      added `ers_document_create_turnover()`.
+--   3. `interviewApi.history()` / the new `turnoverHistory()` (see below)
+--      read a table called `interview_turnover_log` that never existed in
+--      this schema (only in the localStorage demo adapter) — added it,
+--      plus a trigger (`interview_log_turnover_assignment`) that keeps it
+--      in sync every time a candidate is proposed to / released from a
+--      turnover, mirroring the demo adapter exactly.
+--   4. `turnover_sync_karyawan_baru()` only ever synced
+--      `nama_karyawan_baru`, never actually moved `status` to "Terpilih"
+--      on hire (or back to "Interview User" if the hire is undone) even
+--      though the UI text next to the status dropdown claims it does.
+--   5. `turnover_check_ers_accepted()`'s "already used" duplicate check
+--      compared `status = 'Accepted'`, a value that can't exist under the
+--      new pipeline — simplified to "any turnover already exists for this
+--      ERS", matching the new 1-ERS-to-1-turnover trigger's own guard.
+--   6. `notify_turnover_status()` fired on status 'Accepted'/'Rejected',
+--      also no longer reachable values — now fires once, when a turnover
+--      reaches 'Terpilih'.
+--
 -- This whole file is safe to re-run on a project that already has an
 -- earlier version of this schema — it drops its own objects first.
 -- =========================================================================
@@ -164,6 +194,7 @@ drop view if exists my_notifications cascade;
 drop table if exists notification_reads cascade;
 drop table if exists notifications cascade;
 drop table if exists id_card_process cascade;
+drop table if exists interview_turnover_log cascade;
 drop table if exists interview_candidate_history cascade;
 drop table if exists interview_candidates cascade;
 drop table if exists interview_harian cascade;
@@ -174,6 +205,7 @@ drop table if exists areas cascade;
 drop type if exists user_role cascade;
 drop type if exists user_status cascade;
 drop type if exists doc_status cascade;
+drop type if exists turnover_status cascade;
 drop type if exists idcard_status cascade;
 drop type if exists interview_result cascade;
 drop type if exists hire_status_type cascade;
@@ -181,6 +213,7 @@ drop function if exists auth_role() cascade;
 drop function if exists auth_area() cascade;
 drop function if exists next_doc_number(text, regclass, text) cascade;
 drop function if exists ers_document_set_nomor() cascade;
+drop function if exists ers_document_create_turnover() cascade;
 drop function if exists turnover_set_nomor() cascade;
 drop function if exists turnover_check_ers_accepted() cascade;
 drop function if exists id_card_process_autofill() cascade;
@@ -188,6 +221,7 @@ drop function if exists turnover_sync_karyawan_baru() cascade;
 drop function if exists interview_check_turnover_open() cascade;
 drop function if exists interview_harian_auto_not_hire_siblings() cascade;
 drop function if exists interview_harian_sync_candidate_pool() cascade;
+drop function if exists interview_log_turnover_assignment() cascade;
 drop function if exists set_updated_at() cascade;
 drop function if exists create_notification(varchar, varchar, text, uuid) cascade;
 drop function if exists notify_ers_created() cascade;
@@ -207,6 +241,13 @@ create type user_role as enum (
 );
 create type user_status as enum ('Active', 'Inactive');
 create type doc_status as enum ('Pending', 'Accepted', 'Rejected');
+-- Turnover's own 7-stage pipeline (mirrors TURNOVER_STATUS_LIST in
+-- src/lib/constants.js exactly) -- separate from doc_status because ERS
+-- only ever needs Pending/Accepted/Rejected.
+create type turnover_status as enum (
+  'Belum Kirim', 'Sudah Kirim', 'Pengurangan', 'Interview User',
+  'Terpilih', 'Menunggu Info User', 'Dihold Sementara'
+);
 create type idcard_status as enum ('Pending', 'In Progress', 'Completed');
 create type interview_result as enum ('Recommended', 'Considered', 'Not Recommended');
 create type hire_status_type as enum ('-', 'Hired', 'Not Hired');
@@ -274,7 +315,7 @@ create table turnover (
   nama_user varchar(255),
   keterangan_proses text,
   nama_karyawan_baru varchar(255), -- auto-synced by trigger below when a linked interview is marked Hired
-  status doc_status not null default 'Pending',
+  status turnover_status not null default 'Belum Kirim',
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -366,6 +407,24 @@ create table interview_candidate_history (
   hasil_interview interview_result,
   hire_status hire_status_type,
   created_at timestamptz default now()
+);
+
+-- "Riwayat pengajuan turnover" per candidate/per turnover: one row per
+-- span of time a candidate was assigned (`turnover_id`) to a given
+-- turnover. `unassigned_at` + `outcome` are null while the assignment is
+-- still active; set once the candidate is released (manually "Lepas", or
+-- auto-released because a sibling got Hired instead) -- `outcome` records
+-- their hire_status at that moment. Powers both:
+--   - CandidateList's per-candidate "Riwayat Pengajuan Turnover"
+--   - Recruitment's per-turnover "Peserta yang Tidak Terpilih" (candidates
+--     once proposed to THIS turnover but released without being hired)
+create table interview_turnover_log (
+  id uuid primary key default gen_random_uuid(),
+  interview_harian_id uuid not null references interview_harian (id) on delete cascade,
+  turnover_id uuid not null references turnover (id) on delete cascade,
+  assigned_at timestamptz not null default now(),
+  unassigned_at timestamptz,
+  outcome hire_status_type
 );
 
 -- ---------- Notifications (activity feed, shared across all roles) ----------
@@ -472,10 +531,12 @@ begin
   if ers_status is distinct from 'Accepted' then
     raise exception 'Dokumen ERS yang dipilih belum Accepted, turnover tidak bisa dibuat.';
   end if;
+  -- One ERS -> at most one turnover, full stop (regardless of what stage
+  -- of the 7-stage pipeline that turnover is currently at).
   select nomor_turnover into already_used_turnover
-    from turnover where ers_document_id = new.ers_document_id and status = 'Accepted' limit 1;
+    from turnover where ers_document_id = new.ers_document_id limit 1;
   if already_used_turnover is not null then
-    raise exception 'Dokumen ERS ini sudah dipakai pada turnover % yang sudah Accepted, tidak bisa dipakai lagi.', already_used_turnover;
+    raise exception 'Dokumen ERS ini sudah memiliki turnover % — tidak bisa dibuat lagi.', already_used_turnover;
   end if;
   return new;
 end;
@@ -483,6 +544,34 @@ $$;
 create trigger trg_turnover_check_ers_accepted
   before insert on turnover
   for each row execute function turnover_check_ers_accepted();
+
+-- =========================================================================
+-- The instant Recruitment Accepts an ERS, its turnover request exists
+-- automatically — OPS/Recruitment never insert a turnover row by hand
+-- (there's no form for it in the UI). SECURITY DEFINER since accepting an
+-- ERS is an ers_document UPDATE by HR_Recruitment, who has no INSERT
+-- grant on turnover otherwise (turnover_insert only allows OPS/Super_Admin
+-- — left as-is for defence in depth, this trigger bypasses it on purpose).
+-- Idempotent: does nothing if a turnover already exists for this ERS.
+-- =========================================================================
+create or replace function ers_document_create_turnover() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.status = 'Accepted' and old.status is distinct from 'Accepted' then
+    if not exists (select 1 from turnover where ers_document_id = new.id) then
+      insert into turnover (
+        area_penempatan, created_by, ers_document_id, jabatan, nama_karyawan_existing, nama_user
+      ) values (
+        new.area_penempatan, new.uploaded_by, new.id, new.jabatan, new.nama_karyawan_existing, new.pemohon_nama
+      );
+    end if;
+  end if;
+  return new;
+end;
+$$;
+create trigger trg_ers_document_create_turnover
+  after update on ers_document
+  for each row execute function ers_document_create_turnover();
 
 -- =========================================================================
 -- Auto-fill id_card_process from the linked interview when Recruitment
@@ -532,9 +621,9 @@ language plpgsql security definer set search_path = public as $$
 begin
   if new.turnover_id is not null then
     if new.hire_status = 'Hired' then
-      update turnover set nama_karyawan_baru = new.nama_kandidat where id = new.turnover_id;
+      update turnover set nama_karyawan_baru = new.nama_kandidat, status = 'Terpilih' where id = new.turnover_id;
     elsif old.hire_status = 'Hired' and new.hire_status is distinct from 'Hired' then
-      update turnover set nama_karyawan_baru = null
+      update turnover set nama_karyawan_baru = null, status = 'Interview User'
         where id = new.turnover_id and nama_karyawan_baru = old.nama_kandidat;
     end if;
   end if;
@@ -671,6 +760,38 @@ create trigger trg_interview_harian_sync_candidate_pool
   after update on interview_harian
   for each row execute function interview_harian_sync_candidate_pool();
 
+-- =========================================================================
+-- "Riwayat pengajuan turnover" log (interview_turnover_log): every time a
+-- candidate's turnover_id actually changes, close out the previous open
+-- assignment span (if any) with unassigned_at/outcome, and open a new one
+-- for the new assignment (if any). Fires AFTER
+-- trg_interview_harian_auto_not_hire_siblings alphabetically, so for
+-- siblings auto-released when someone else gets Hired, NEW.hire_status is
+-- already 'Not Hired' by the time this runs -- outcome captures that
+-- correctly, same as a manual "Lepas" captures whatever hire_status was
+-- at that moment (usually still '-').
+-- =========================================================================
+create or replace function interview_log_turnover_assignment() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if old.turnover_id is not null then
+    update interview_turnover_log
+      set unassigned_at = now(), outcome = new.hire_status
+      where interview_harian_id = new.id and turnover_id = old.turnover_id and unassigned_at is null;
+  end if;
+  if new.turnover_id is not null then
+    insert into interview_turnover_log (interview_harian_id, turnover_id)
+      values (new.id, new.turnover_id);
+  end if;
+  return new;
+end;
+$$;
+create trigger trg_interview_log_turnover_assignment
+  after update on interview_harian
+  for each row
+  when (new.turnover_id is distinct from old.turnover_id)
+  execute function interview_log_turnover_assignment();
+
 -- keep updated_at current on turnover/users edits
 create or replace function set_updated_at() returns trigger
 language plpgsql security definer set search_path = public as $$
@@ -721,11 +842,11 @@ create trigger trg_notify_ers_created after insert on ers_document
 create or replace function notify_turnover_status() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
-  if new.status is distinct from old.status and new.status in ('Accepted', 'Rejected') then
+  if new.status is distinct from old.status and new.status = 'Terpilih' then
     perform create_notification(
       'turnover',
-      case when new.status = 'Accepted' then 'Turnover disetujui' else 'Turnover ditolak' end,
-      coalesce(new.jabatan, '-') || ' — ' || coalesce(new.nama_karyawan_existing, '-') || ' (' || coalesce(new.nomor_turnover, '-') || ')',
+      'Turnover terisi',
+      coalesce(new.jabatan, '-') || ' — ' || coalesce(new.nama_karyawan_baru, new.nama_karyawan_existing, '-') || ' (' || coalesce(new.nomor_turnover, '-') || ')',
       new.id
     );
   end if;
@@ -883,6 +1004,14 @@ create policy interview_candidate_history_select on interview_candidate_history 
   auth_role() in ('Super_Admin', 'HR_Recruitment')
 );
 
+-- "Riwayat pengajuan turnover" log: same access as the candidate pool
+-- above — read-only for the client, every row comes from the
+-- interview_log_turnover_assignment trigger (SECURITY DEFINER).
+alter table interview_turnover_log enable row level security;
+create policy interview_turnover_log_select on interview_turnover_log for select using (
+  auth_role() in ('Super_Admin', 'HR_Recruitment')
+);
+
 -- ID card: Training manages the queue; Recruitment can also INSERT because
 -- "Tandai Hired" in the Recruitment module is what creates the row — and
 -- also needs SELECT here, because the app does `insert(...).select()`,
@@ -952,7 +1081,7 @@ create policy "Authenticated upload idcard-photos" on storage.objects
 grant usage on schema public to authenticated;
 grant select, insert, update, delete on
   users, ers_document, turnover, interview_harian, interview_candidates, interview_candidate_history,
-  id_card_process, notifications, notification_reads
+  interview_turnover_log, id_card_process, notifications, notification_reads
   to authenticated;
 grant execute on function mark_all_notifications_read() to authenticated;
 

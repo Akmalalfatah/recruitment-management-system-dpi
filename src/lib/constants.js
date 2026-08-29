@@ -105,6 +105,13 @@ export const INFO_LOKER_LIST = [
 
 export const HASIL_INTERVIEW_LIST = ["Recommended", "Considered", "Not Recommended"];
 
+// Fixed recruiter roster -- used both for Turnover's "Nama Rekruter" and
+// Interview Harian's "Nama Koordinator / Rekruter" so the same list of
+// names is picked from consistently everywhere instead of free text.
+export const REKRUTER_LIST = [
+  "Febri", "Eka", "Anton", "Reggy", "Widad", "Dinda", "Ryan", "Rani", "Rodrik", "Bayu", "Redi", "Puja",
+];
+
 export const HIRE_STATUS = {
   NONE: "-",
   HIRED: "Hired",

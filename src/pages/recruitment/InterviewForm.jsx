@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { interviewApi } from "../../lib/db";
 import { Field, TextInput, SelectInput, PrimaryButton, Card } from "../../components/common/Ui";
-import { PENDIDIKAN_LIST, AGAMA_LIST, INFO_LOKER_LIST, JABATAN_LIST } from "../../lib/constants";
+import { PENDIDIKAN_LIST, AGAMA_LIST, INFO_LOKER_LIST, JABATAN_LIST, REKRUTER_LIST } from "../../lib/constants";
 
 const emptyForm = {
   nama_kandidat: "",
@@ -18,6 +18,7 @@ const emptyForm = {
   no_hp: "",
   keterangan_referensi: "",
   keterangan_interview: "",
+  nama_koordinator: "",
 };
 
 export default function InterviewForm() {
@@ -38,7 +39,7 @@ export default function InterviewForm() {
       await interviewApi.create({
         ...form,
         turnover_id: null, // diajukan ke turnover belakangan, dari layar Turnover
-        nama_koordinator: "-",
+        nama_koordinator: form.nama_koordinator || "-",
         tenggat_waktu_proses: 7,
         keterangan_banding: "-",
         hasil_interview: null,
@@ -76,6 +77,14 @@ export default function InterviewForm() {
             </Field>
             <Field label="Posisi Dilamar">
               <SelectInput value={form.posisi_yang_dilamar} onChange={(e) => set("posisi_yang_dilamar", e.target.value)} options={JABATAN_LIST} />
+            </Field>
+            <Field label="Nama Koordinator / Rekruter">
+              <SelectInput
+                value={form.nama_koordinator}
+                onChange={(e) => set("nama_koordinator", e.target.value)}
+                options={REKRUTER_LIST}
+                placeholder="Pilih rekruter..."
+              />
             </Field>
             <Field label="Pendidikan">
               <SelectInput value={form.pendidikan} onChange={(e) => set("pendidikan", e.target.value)} options={PENDIDIKAN_LIST} />

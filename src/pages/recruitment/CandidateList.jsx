@@ -1,13 +1,30 @@
 import { useEffect, useState, useCallback } from "react";
-import { Users2, Download, Info, History } from "lucide-react";
+import { Users2, Download, Info, History, Plus, Save } from "lucide-react";
 import { interviewApi } from "../../lib/db";
-import { PageHeader, Card, ActionIconButton } from "../../components/common/Ui";
+import { PageHeader, Card, ActionIconButton, PrimaryButton, GhostButton, Field, TextInput, SelectInput } from "../../components/common/Ui";
 import DataTable from "../../components/common/DataTable";
+import DateRangeFilter from "../../components/common/DateRangeFilter";
 import StatusBadge from "../../components/common/StatusBadge";
 import Modal from "../../components/common/Modal";
 import { exportToExcel } from "../../utils/exportExcel";
 import { formatDate } from "../../utils/formatDate";
-import { KRITERIA_PENILAIAN } from "../../lib/constants";
+import {
+  KRITERIA_PENILAIAN, PENDIDIKAN_LIST, AGAMA_LIST, INFO_LOKER_LIST, HASIL_INTERVIEW_LIST,
+} from "../../lib/constants";
+
+const emptyManual = {
+  nama_kandidat: "",
+  posisi_yang_dilamar: "",
+  pendidikan: "",
+  jurusan: "",
+  agama: "",
+  info_loker: "",
+  domisili: "",
+  no_hp: "",
+  tanggal_interview: "",
+  hasil_interview: "Recommended",
+  keterangan_interview: "",
+};
 
 // "Data Peserta Wawancara" is no longer a separate archive table -- it's
 // interview_harian rows whose hasil_interview is Recommended or
@@ -18,25 +35,23 @@ export default function CandidateList() {
   const [active, setActive] = useState(null);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [monthFilter, setMonthFilter] = useState(""); // "" = semua bulan, format "YYYY-MM"
+  const [range, setRange] = useState({ from: "", to: "" });
+
+  const [showManual, setShowManual] = useState(false);
+  const [manual, setManual] = useState(emptyManual);
+  const [savingManual, setSavingManual] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
     interviewApi
-      .listHold()
+      .listHold({ dateFrom: range.from, dateTo: range.to })
       .then(setRows)
       .finally(() => setLoading(false));
-  }, []);
+  }, [range]);
 
   useEffect(() => {
     load();
   }, [load]);
-
-  // Rekap bulanan: filter di sisi klien berdasarkan tanggal interview,
-  // dipakai baik untuk tabel yang ditampilkan maupun untuk ekspor Excel.
-  const filteredRows = monthFilter
-    ? rows.filter((r) => (r.tanggal_interview || "").startsWith(monthFilter))
-    : rows;
 
   // Same weighted formula as Interview Harian's edit screen -- keeps
   // "Total Nilai" consistent everywhere it's shown.
@@ -52,11 +67,45 @@ export default function CandidateList() {
       .finally(() => setHistoryLoading(false));
   }
 
+  function setManualField(key, value) {
+    setManual((f) => ({ ...f, [key]: value }));
+  }
+
+  // Adds a candidate that never went through an actual interview in this
+  // app -- for backfilling applicants that existed before the system did.
+  // No scoring, no koordinator/rekruter, no turnover assignment; just the
+  // bare candidate data plus a Hasil Interview so it shows up in this list.
+  async function saveManual(e) {
+    e.preventDefault();
+    setSavingManual(true);
+    try {
+      await interviewApi.create({
+        ...manual,
+        turnover_id: null,
+        nama_koordinator: "-",
+        tenggat_waktu_proses: 0,
+        keterangan_banding: "-",
+        list_diajukan_ke_user: "-",
+        hire_status: "-",
+        komunikasi: 0,
+        penampilan: 0,
+        pengetahuan_pekerjaan: 0,
+        keterampilan: 0,
+        pengalaman_kerja: 0,
+      });
+      setShowManual(false);
+      setManual(emptyManual);
+      load();
+    } finally {
+      setSavingManual(false);
+    }
+  }
+
   const columns = [
     { key: "nama_kandidat", header: "Nama" },
-    { key: "posisi_yang_dilamar", header: "Posisi Dilamar" },
+    { key: "posisi_yang_dilamar", header: "Posisi", render: (r) => r.turnover?.jabatan || r.posisi_yang_dilamar || "-" },
+    { key: "domisili", header: "Lokasi", render: (r) => r.turnover?.area_penempatan || r.domisili || "-" },
     { key: "jurusan", header: "Jurusan", render: (r) => r.jurusan || "-" },
-    { key: "domisili", header: "Domisili" },
     { key: "no_hp", header: "No. HP" },
     { key: "hasil_interview", header: "Hasil Interview", render: (r) => <StatusBadge status={r.hasil_interview || "-"} /> },
     { key: "total_nilai", header: "Total Nilai", render: (r) => totalNilai(r) },
@@ -82,50 +131,88 @@ export default function CandidateList() {
       <PageHeader
         title="Recruitment - Data Peserta Wawancara"
         subtitle="Daftar kandidat hasil interview yang layak dipertimbangkan."
+        action={
+          <PrimaryButton onClick={() => setShowManual(true)}>
+            <Plus size={15} /> Tambah Pelamar
+          </PrimaryButton>
+        }
       />
       <Card className="p-4">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
           <div className="flex items-center gap-2 text-ink-700 font-semibold text-sm">
             <Users2 size={16} className="text-primary" /> Daftar Peserta Wawancara
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-1.5">
-              <label className="text-xs text-ink-500 font-medium">Rekap Bulan</label>
-              <input
-                type="month"
-                value={monthFilter}
-                onChange={(e) => setMonthFilter(e.target.value)}
-                className="border border-surface-border px-2.5 py-1.5 text-xs text-ink-900 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-              />
-              {monthFilter && (
-                <button
-                  type="button"
-                  onClick={() => setMonthFilter("")}
-                  className="text-xs text-ink-500 hover:text-primary underline"
-                >
-                  Semua Bulan
-                </button>
-              )}
-            </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <DateRangeFilter from={range.from} to={range.to} onChange={setRange} />
             <button
-              onClick={() =>
-                exportToExcel(
-                  filteredRows.map((r) => ({ ...r, turnover: undefined })),
-                  monthFilter ? `Data_Peserta_Wawancara_${monthFilter}` : "Data_Peserta_Wawancara"
-                )
-              }
+              onClick={() => exportToExcel(rows.map((r) => ({ ...r, turnover: undefined })), "Data_Peserta_Wawancara")}
               className="flex items-center gap-1.5 text-xs font-semibold text-primary border border-primary/30 bg-primary/5 hover:bg-primary/10 px-3 py-1.5 "
             >
-              <Download size={13} /> {monthFilter ? "Ekspor Rekap Bulan Ini" : "Ekspor Excel"}
+              <Download size={13} /> Ekspor Excel
             </button>
           </div>
         </div>
         {loading ? (
           <p className="text-sm text-ink-500 py-6 text-center">Memuat data...</p>
         ) : (
-          <DataTable columns={columns} rows={filteredRows} emptyLabel="Belum ada peserta dengan hasil Recommended/Considered." />
+          <DataTable columns={columns} rows={rows} emptyLabel="Belum ada peserta dengan hasil Recommended/Considered." />
         )}
       </Card>
+
+      {/* Tambah pelamar tanpa proses interview di aplikasi (data lama) */}
+      <Modal open={showManual} onClose={() => setShowManual(false)} title="Tambah Pelamar (Tanpa Wawancara)" width="max-w-xl">
+        <form onSubmit={saveManual} className="space-y-4">
+          <p className="text-xs text-ink-500 -mt-1">
+            Untuk mencatat pelamar yang sudah ada sebelum aplikasi ini dipakai -- data langsung masuk ke daftar ini tanpa penilaian/skor.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Nama Kandidat">
+              <TextInput value={manual.nama_kandidat} onChange={(e) => setManualField("nama_kandidat", e.target.value)} required />
+            </Field>
+            <Field label="Posisi Dilamar">
+              <TextInput value={manual.posisi_yang_dilamar} onChange={(e) => setManualField("posisi_yang_dilamar", e.target.value)} required />
+            </Field>
+            <Field label="Pendidikan">
+              <SelectInput value={manual.pendidikan} onChange={(e) => setManualField("pendidikan", e.target.value)} options={PENDIDIKAN_LIST} />
+            </Field>
+            <Field label="Jurusan">
+              <TextInput value={manual.jurusan} onChange={(e) => setManualField("jurusan", e.target.value)} placeholder="-" />
+            </Field>
+            <Field label="Agama">
+              <SelectInput value={manual.agama} onChange={(e) => setManualField("agama", e.target.value)} options={AGAMA_LIST} />
+            </Field>
+            <Field label="Info Lowongan">
+              <SelectInput value={manual.info_loker} onChange={(e) => setManualField("info_loker", e.target.value)} options={INFO_LOKER_LIST} />
+            </Field>
+            <Field label="Domisili">
+              <TextInput value={manual.domisili} onChange={(e) => setManualField("domisili", e.target.value)} />
+            </Field>
+            <Field label="No. HP">
+              <TextInput value={manual.no_hp} onChange={(e) => setManualField("no_hp", e.target.value)} />
+            </Field>
+            <Field label="Tanggal Interview / Data">
+              <TextInput type="date" value={manual.tanggal_interview} onChange={(e) => setManualField("tanggal_interview", e.target.value)} />
+            </Field>
+            <Field label="Hasil Interview">
+              <SelectInput
+                value={manual.hasil_interview}
+                onChange={(e) => setManualField("hasil_interview", e.target.value)}
+                options={HASIL_INTERVIEW_LIST.filter((h) => h !== "Not Recommended")}
+                required
+              />
+            </Field>
+          </div>
+          <Field label="Keterangan">
+            <TextInput value={manual.keterangan_interview} onChange={(e) => setManualField("keterangan_interview", e.target.value)} placeholder="-" />
+          </Field>
+          <div className="flex justify-end gap-2 pt-2">
+            <GhostButton type="button" onClick={() => setShowManual(false)}>Batal</GhostButton>
+            <PrimaryButton type="submit" disabled={savingManual}>
+              <Save size={14} /> {savingManual ? "Menyimpan..." : "Simpan"}
+            </PrimaryButton>
+          </div>
+        </form>
+      </Modal>
 
       <Modal open={!!active} onClose={() => setActive(null)} title="Detail Peserta Wawancara">
         {active && (
@@ -133,7 +220,7 @@ export default function CandidateList() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-bold text-ink-900">{active.nama_kandidat}</p>
-                <p className="text-xs text-ink-500">{active.posisi_yang_dilamar || "-"}</p>
+                <p className="text-xs text-ink-500">{active.turnover?.jabatan || active.posisi_yang_dilamar || "-"}</p>
               </div>
               <div className="flex items-center gap-2">
                 <StatusBadge status={active.hasil_interview || "-"} />
@@ -142,7 +229,7 @@ export default function CandidateList() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <DetailField label="No. HP" value={active.no_hp} />
-              <DetailField label="Domisili" value={active.domisili} />
+              <DetailField label="Lokasi" value={active.turnover?.area_penempatan || active.domisili} />
               <DetailField label="Pendidikan" value={active.pendidikan} />
               <DetailField label="Jurusan" value={active.jurusan} />
               <DetailField label="Agama" value={active.agama} />
