@@ -8,13 +8,14 @@ import StatusBadge from "../../components/common/StatusBadge";
 import Modal from "../../components/common/Modal";
 import { exportTurnoverExcel } from "../../utils/exportExcel";
 import { formatDate } from "../../utils/formatDate";
-import { TURNOVER_STATUS_LIST, TURNOVER_STATUS_TERPILIH } from "../../lib/constants";
+import { TURNOVER_STATUS_LIST, TURNOVER_STATUS_TERPILIH, REKRUTER_LIST } from "../../lib/constants";
 import { useAuth } from "../../contexts/AuthContext";
 
 const emptyDraft = {
   status: "",
   nama_rekruter: "",
   nama_koordinator: "",
+  nama_user: "",
   tgl_kirim_kandidat: "",
   tgl_interview_user: "",
   tgl_pkwt: "",
@@ -35,6 +36,7 @@ export default function RecruitmentTurnoverList() {
   const [active, setActive] = useState(null);
   const [assigned, setAssigned] = useState([]);
   const [pool, setPool] = useState([]);
+  const [history, setHistory] = useState([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [showSourcing, setShowSourcing] = useState(false);
@@ -60,9 +62,14 @@ export default function RecruitmentTurnoverList() {
   async function loadDetail(turnoverId) {
     setDetailLoading(true);
     try {
-      const [allInterviews, poolList] = await Promise.all([interviewApi.list({}), interviewApi.listAvailablePool()]);
+      const [allInterviews, poolList, historyList] = await Promise.all([
+        interviewApi.list({}),
+        interviewApi.listAvailablePool(),
+        interviewApi.turnoverHistory(turnoverId),
+      ]);
       setAssigned(allInterviews.filter((i) => i.turnover_id === turnoverId));
       setPool(poolList);
+      setHistory(historyList);
     } finally {
       setDetailLoading(false);
     }
@@ -75,11 +82,9 @@ export default function RecruitmentTurnoverList() {
     setSourcingForm(emptySourcing);
     setDraft({
       status: row.status || "",
-      // Belum pernah diisi -> otomatis pakai nama Recruitment yang sedang
-      // login (masih bisa diganti manual kalau turnover ini ditangani
-      // rekruter lain).
-      nama_rekruter: row.nama_rekruter || user?.name || "",
+      nama_rekruter: row.nama_rekruter || "",
       nama_koordinator: row.nama_koordinator || "",
+      nama_user: row.nama_user || "",
       tgl_kirim_kandidat: row.tgl_kirim_kandidat || "",
       tgl_interview_user: row.tgl_interview_user || "",
       tgl_pkwt: row.tgl_pkwt || "",
@@ -93,6 +98,7 @@ export default function RecruitmentTurnoverList() {
     setActive(null);
     setAssigned([]);
     setPool([]);
+    setHistory([]);
     setShowPicker(false);
     setShowSourcing(false);
     setSourcingForm(emptySourcing);
@@ -164,6 +170,7 @@ export default function RecruitmentTurnoverList() {
     { key: "nama_karyawan_existing", header: "Karyawan Lama" },
     { key: "nama_karyawan_baru", header: "Karyawan Baru", render: (r) => r.nama_karyawan_baru || "-" },
     { key: "nama_rekruter", header: "Nama Rekruter", render: (r) => r.nama_rekruter || "-" },
+    { key: "nama_user", header: "Nama User", render: (r) => r.nama_user || "-" },
     { key: "tanggal_permintaan", header: "Tanggal Pengajuan", render: (r) => formatDate(r.tanggal_permintaan) },
     { key: "status", header: "Status", render: (r) => <StatusBadge status={r.status} /> },
     {
@@ -255,11 +262,24 @@ export default function RecruitmentTurnoverList() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-ink-500 mb-1">Nama Rekruter</label>
-                  <TextInput value={draft.nama_rekruter} onChange={(e) => setDraft((d) => ({ ...d, nama_rekruter: e.target.value }))} />
+                  <SelectInput
+                    value={draft.nama_rekruter}
+                    onChange={(e) => setDraft((d) => ({ ...d, nama_rekruter: e.target.value }))}
+                    options={REKRUTER_LIST}
+                    placeholder="Pilih rekruter..."
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-ink-500 mb-1">Nama Koordinator</label>
                   <TextInput value={draft.nama_koordinator} onChange={(e) => setDraft((d) => ({ ...d, nama_koordinator: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-ink-500 mb-1">Nama User</label>
+                  <TextInput
+                    value={draft.nama_user}
+                    onChange={(e) => setDraft((d) => ({ ...d, nama_user: e.target.value }))}
+                    placeholder="Nama pemohon / user terkait permintaan ini"
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-ink-500 mb-1">Tgl Kirim Kandidat</label>
@@ -324,6 +344,37 @@ export default function RecruitmentTurnoverList() {
                         )}
                       </div>
                     </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* ---- History: candidates once proposed here but not picked ---- */}
+            <div className="pt-4 border-t border-surface-border">
+              <p className="text-xs font-semibold text-ink-700 uppercase tracking-wide mb-3">
+                Riwayat Peserta yang Tidak Terpilih
+              </p>
+              {detailLoading ? (
+                <p className="text-xs text-ink-500">Memuat riwayat...</p>
+              ) : history.length === 0 ? (
+                <p className="text-xs text-ink-500">Belum ada peserta yang dilepas dari turnover ini.</p>
+              ) : (
+                <div className="space-y-2">
+                  {history.map((h) => (
+                    <button
+                      key={h.id}
+                      type="button"
+                      onClick={() => h.interview_harian && setCandidateDetail(h.interview_harian)}
+                      className="w-full text-left border border-surface-border px-3 py-2.5 flex items-center justify-between gap-3 flex-wrap hover:bg-surface-panel transition-colors"
+                    >
+                      <div className="flex-1 min-w-[120px]">
+                        <p className="text-sm font-semibold text-ink-900">{h.interview_harian?.nama_kandidat || "-"}</p>
+                        <p className="text-[11px] text-ink-500">
+                          {h.interview_harian?.posisi_yang_dilamar || "-"} &middot; diajukan {formatDate(h.assigned_at)}, dilepas {formatDate(h.unassigned_at)}
+                        </p>
+                      </div>
+                      <StatusBadge status={h.outcome || "-"} />
+                    </button>
                   ))}
                 </div>
               )}

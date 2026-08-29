@@ -181,6 +181,21 @@ export const interviewApi = {
   async assignToTurnover(id, turnoverId) {
     return this.update(id, { turnover_id: turnoverId });
   },
+  // "Peserta yang Tidak Terpilih" on the Turnover edit screen: every
+  // candidate ever proposed to THIS turnover and later released
+  // (unassigned_at set) -- i.e. everyone who was considered but didn't end
+  // up being the hire, not just the ones currently attached.
+  async turnoverHistory(turnoverId) {
+    if (!isSupabaseConfigured) return mockAdapter.listTurnoverCandidateHistory(turnoverId);
+    const { data, error } = await supabase
+      .from("interview_turnover_log")
+      .select("*, interview_harian:interview_harian(*)")
+      .eq("turnover_id", turnoverId)
+      .not("unassigned_at", "is", null)
+      .order("assigned_at", { ascending: false });
+    if (error) throw error;
+    return data;
+  },
 };
 
 export const idCardApi = {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { IdCard as IdCardIcon, Download, Info, Upload, BadgeCheck, CheckCircle2 } from "lucide-react";
+import { IdCard as IdCardIcon, Download, Info, Upload, BadgeCheck, CheckCircle2, Printer } from "lucide-react";
 import { idCardApi } from "../../lib/db";
 import { PageHeader, Card, PrimaryButton, GhostButton, ActionIconButton } from "../../components/common/Ui";
 import DataTable from "../../components/common/DataTable";
@@ -7,7 +7,7 @@ import DateRangeFilter from "../../components/common/DateRangeFilter";
 import StatusBadge from "../../components/common/StatusBadge";
 import Modal from "../../components/common/Modal";
 import { exportToExcel } from "../../utils/exportExcel";
-import { renderIdCardCanvas, downloadIdCardPng } from "../../utils/exportIdCard";
+import { renderIdCardCanvas, downloadIdCardPng, printIdCard } from "../../utils/exportIdCard";
 
 export default function IdCardList() {
   const [rows, setRows] = useState([]);
@@ -16,6 +16,7 @@ export default function IdCardList() {
   const [active, setActive] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const previewRef = useRef(null);
 
   const load = useCallback(() => {
@@ -94,6 +95,17 @@ export default function IdCardList() {
     }
   }
 
+  async function handlePrint(record) {
+    setPrinting(true);
+    try {
+      await printIdCard(record);
+    } catch (err) {
+      alert(err?.message || "Gagal mencetak ID Card.");
+    } finally {
+      setPrinting(false);
+    }
+  }
+
   const columns = [
     { key: "nama_karyawan", header: "Nama Karyawan" },
     { key: "nomor_karyawan", header: "No. Karyawan" },
@@ -103,7 +115,14 @@ export default function IdCardList() {
     {
       key: "aksi",
       header: "Aksi",
-      render: (r) => <ActionIconButton icon={Info} onClick={() => openDetail(r)} variant="info" title="Lihat detail" />,
+      render: (r) => (
+        <div className="flex items-center gap-1.5">
+          <ActionIconButton icon={Info} onClick={() => openDetail(r)} variant="info" title="Lihat detail" />
+          {r.status === "Completed" && (
+            <ActionIconButton icon={Printer} onClick={() => handlePrint(r)} variant="edit" title="Cetak ID Card" />
+          )}
+        </div>
+      ),
     },
   ];
 
@@ -168,7 +187,10 @@ export default function IdCardList() {
                         <CheckCircle2 size={16} />
                         ID Card sudah selesai dibuat untuk karyawan ini.
                       </div>
-                      <div className="flex justify-end">
+                      <div className="flex justify-end gap-2">
+                        <GhostButton onClick={() => handlePrint(active)} disabled={printing}>
+                          <Printer size={14} /> {printing ? "Menyiapkan..." : "Cetak"}
+                        </GhostButton>
                         <PrimaryButton onClick={() => downloadIdCardPng(active)}>
                           <Download size={14} /> Download ID Card (PNG)
                         </PrimaryButton>

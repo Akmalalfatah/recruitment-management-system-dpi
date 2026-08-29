@@ -2,14 +2,14 @@ import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Users, Download, Plus, Pencil, Save, Info } from "lucide-react";
 import { interviewApi } from "../../lib/db";
-import { PageHeader, Card, PrimaryButton, GhostButton, TextInput, ActionIconButton } from "../../components/common/Ui";
+import { PageHeader, Card, PrimaryButton, GhostButton, TextInput, SelectInput, ActionIconButton } from "../../components/common/Ui";
 import DataTable from "../../components/common/DataTable";
 import DateRangeFilter from "../../components/common/DateRangeFilter";
 import StatusBadge from "../../components/common/StatusBadge";
 import Modal from "../../components/common/Modal";
 import { exportToExcel } from "../../utils/exportExcel";
 import { formatDate } from "../../utils/formatDate";
-import { KRITERIA_PENILAIAN } from "../../lib/constants";
+import { KRITERIA_PENILAIAN, REKRUTER_LIST } from "../../lib/constants";
 
 // Interview harian is now independent of turnover -- hiring decisions are
 // made from the Turnover edit screen (Recruitment > Turnover), not here.
@@ -39,6 +39,7 @@ export default function InterviewList() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState({ from: "", to: "" });
+  const [rekruterFilter, setRekruterFilter] = useState("");
   const [active, setActive] = useState(null);
 
   const [editRow, setEditRow] = useState(null);
@@ -57,6 +58,11 @@ export default function InterviewList() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Client-side filter by Nama Koordinator/Rekruter -- keeps the query
+  // shape simple (still just dateFrom/dateTo server-side) while letting
+  // Recruitment narrow the list down to one recruiter's candidates.
+  const filteredRows = rekruterFilter ? rows.filter((r) => r.nama_koordinator === rekruterFilter) : rows;
 
   function openDetail(row) {
     setActive(row);
@@ -96,6 +102,7 @@ export default function InterviewList() {
     { key: "nama_kandidat", header: "Nama Kandidat" },
     { key: "posisi_yang_dilamar", header: "Posisi Dilamar" },
     { key: "jurusan", header: "Jurusan", render: (r) => r.jurusan || "-" },
+    { key: "nama_koordinator", header: "Nama Rekruter", render: (r) => r.nama_koordinator && r.nama_koordinator !== "-" ? r.nama_koordinator : "-" },
     { key: "hasil_interview", header: "Hasil Interview", render: (r) => <StatusBadge status={r.hasil_interview || "-"} /> },
     {
       key: "turnover",
@@ -133,15 +140,25 @@ export default function InterviewList() {
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             <DateRangeFilter from={range.from} to={range.to} onChange={setRange} />
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-ink-500 font-medium">Rekruter</label>
+              <SelectInput
+                value={rekruterFilter}
+                onChange={(e) => setRekruterFilter(e.target.value)}
+                options={REKRUTER_LIST}
+                placeholder="Semua rekruter"
+                className="text-xs"
+              />
+            </div>
             <button
-              onClick={() => exportToExcel(rows.map((r) => ({ ...r, turnover: undefined })), "Interview_Harian")}
+              onClick={() => exportToExcel(filteredRows.map((r) => ({ ...r, turnover: undefined })), "Interview_Harian")}
               className="flex items-center gap-1.5 text-xs font-semibold text-primary border border-primary/30 bg-primary/5 hover:bg-primary/10 px-3 py-1.5 "
             >
               <Download size={13} /> Ekspor Excel
             </button>
           </div>
         </div>
-        {loading ? <p className="text-sm text-ink-500 py-6 text-center">Memuat data...</p> : <DataTable columns={columns} rows={rows} />}
+        {loading ? <p className="text-sm text-ink-500 py-6 text-center">Memuat data...</p> : <DataTable columns={columns} rows={filteredRows} />}
       </Card>
 
       {/* Read-only detail */}
@@ -169,6 +186,7 @@ export default function InterviewList() {
               <DetailField label="Referensi" value={active.keterangan_referensi} />
               <DetailField label="Total Nilai" value={totalNilai(active)} />
               <DetailField label="Ajukan Banding" value={active.keterangan_banding} />
+              <DetailField label="Nama Koordinator / Rekruter" value={active.nama_koordinator} />
               <DetailField label="Turnover Terkait" value={active.turnover?.nomor_turnover} />
             </div>
             <div>

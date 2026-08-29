@@ -82,6 +82,7 @@ export default function TurnoverListPage({ heading, moduleLabel, variant = "area
 
   const columns = [
     ...baseColumns,
+    { key: "nama_user", header: "Nama User", render: (r) => r.nama_user || "-" },
     { key: "tanggal_permintaan", header: "Tanggal Pengajuan", render: (r) => formatDate(r.tanggal_permintaan) },
     { key: "status", header: "Status", render: (r) => <StatusBadge status={r.status} /> },
     {

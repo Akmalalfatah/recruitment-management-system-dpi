@@ -27,7 +27,9 @@ export default function RecruitmentErsList() {
     setLoading(true);
     ersApi
       .list({ dateFrom: range.from, dateTo: range.to })
-      .then(setRows)
+      // Once accepted, an ERS has already done its job (its turnover was
+      // auto-created) -- Recruitment doesn't need to keep seeing it here.
+      .then((all) => setRows(all.filter((r) => r.status !== "Accepted")))
       .finally(() => setLoading(false));
   }, [range]);
 
@@ -78,7 +80,7 @@ export default function RecruitmentErsList() {
     <div>
       <PageHeader
         title="Recruitment - Review ERS"
-        subtitle="Terima atau tolak pengajuan ERS dari Operasional. Turnover dibuat otomatis begitu ERS di-Accept."
+        subtitle="Terima atau tolak pengajuan ERS dari Operasional. Turnover dibuat otomatis begitu ERS di-Accept, dan ERS yang sudah Accepted otomatis hilang dari daftar ini."
       />
       <Card className="p-4">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-3">

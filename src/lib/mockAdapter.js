@@ -413,6 +413,18 @@ export const mockAdapter = {
       .sort((a, b) => (a.assigned_at < b.assigned_at ? 1 : -1));
   },
 
+  // "Peserta yang Tidak Terpilih" on the Turnover edit screen: every
+  // candidate ever proposed to THIS turnover and later released, not just
+  // whoever is currently attached.
+  async listTurnoverCandidateHistory(turnoverId) {
+    await delay();
+    const db = loadDb();
+    return (db.interview_turnover_log || [])
+      .filter((l) => l.turnover_id === turnoverId && l.unassigned_at)
+      .map((l) => ({ ...l, interview_harian: db.interview_harian.find((i) => i.id === l.interview_harian_id) || null }))
+      .sort((a, b) => (a.assigned_at < b.assigned_at ? 1 : -1));
+  },
+
   async createInterview(payload) {
     await delay();
     const db = loadDb();

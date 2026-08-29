@@ -179,3 +179,38 @@ export async function downloadIdCardPng(record) {
   a.download = `IDCard_${record.nomor_karyawan || safeName}.png`;
   a.click();
 }
+
+// Opens a small print-only window with just the card image, sized to a
+// standard CR80 card (54mm x 85.6mm) and margin-free, then triggers the
+// browser's print dialog -- for printing directly instead of only ever
+// downloading a PNG/generating the file first.
+export async function printIdCard(record) {
+  const canvas = await renderIdCardCanvas({
+    name: record.nama_karyawan,
+    employeeId: record.nomor_karyawan,
+    jabatan: record.jabatan,
+    photoDataUrl: record.photo_data_url,
+  });
+  const dataUrl = canvas.toDataURL("image/png");
+
+  const win = window.open("", "_blank", "width=480,height=760");
+  if (!win) {
+    throw new Error("Popup diblokir browser -- izinkan popup untuk situs ini agar bisa mencetak ID Card.");
+  }
+  const safeName = String(record.nama_karyawan || "ID Card").replace(/</g, "");
+  win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+<title>Cetak ID Card - ${safeName}</title>
+<style>
+  @page { size: 54mm 85.6mm; margin: 0; }
+  html, body { margin: 0; padding: 0; height: 100%; display: flex; align-items: center; justify-content: center; background: #fff; }
+  img { width: 54mm; height: auto; display: block; }
+</style>
+</head>
+<body>
+  <img src="${dataUrl}" alt="ID Card" onload="setTimeout(function(){ window.focus(); window.print(); }, 150)" />
+</body>
+</html>`);
+  win.document.close();
+}
