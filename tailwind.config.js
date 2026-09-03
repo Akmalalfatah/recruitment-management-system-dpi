@@ -33,6 +33,7 @@ export default {
           green: "#18D000",
           orange: "#F29339",
           blue: "#54B2EC",
+          teal: "#0F766E",
         },
         ink: {
           900: "#1C2333",

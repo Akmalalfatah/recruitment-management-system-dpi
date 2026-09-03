@@ -56,7 +56,7 @@ export const STATUS_BADGE_STYLE = {
   "In Progress": "bg-status-blue",
   Completed: "bg-status-green",
   Hired: "bg-status-green",
-  "Not Hired": "bg-status-red",
+  "Not Hired": "bg-status-teal",
   "Belum Hired": "bg-ink-300",
   "-": "bg-ink-300",
   // Turnover's 7-stage pipeline
