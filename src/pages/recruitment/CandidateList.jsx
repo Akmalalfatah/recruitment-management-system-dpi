@@ -8,7 +8,7 @@ import StatusBadge from "../../components/common/StatusBadge";
 import Modal from "../../components/common/Modal";
 import { exportToExcel } from "../../utils/exportExcel";
 import { formatDate } from "../../utils/formatDate";
-import { KRITERIA_PENILAIAN } from "../../lib/constants";
+import { AGAMA_LIST, HASIL_INTERVIEW_LIST, INFO_LOKER_LIST, JABATAN_LIST, KRITERIA_PENILAIAN, PENDIDIKAN_LIST } from "../../lib/constants";
 
 const emptyManual = {
   nama_kandidat: "",
@@ -40,6 +40,7 @@ export default function CandidateList() {
   const [showManual, setShowManual] = useState(false);
   const [manual, setManual] = useState(emptyManual);
   const [savingManual, setSavingManual] = useState(false);
+  const [manualError, setManualError] = useState("");
 
   const load = useCallback(() => {
     setLoading(true);
@@ -71,6 +72,12 @@ export default function CandidateList() {
     setManual((f) => ({ ...f, [key]: value }));
   }
 
+  function closeManual() {
+    if (savingManual) return;
+    setShowManual(false);
+    setManualError("");
+  }
+
   // Adds a candidate that never went through an actual interview in this
   // app -- for backfilling applicants that existed before the system did.
   // No scoring, no koordinator/rekruter, no turnover assignment; just the
@@ -78,6 +85,7 @@ export default function CandidateList() {
   async function saveManual(e) {
     e.preventDefault();
     setSavingManual(true);
+    setManualError("");
     try {
       await interviewApi.create({
         ...manual,
@@ -96,6 +104,8 @@ export default function CandidateList() {
       setShowManual(false);
       setManual(emptyManual);
       load();
+    } catch (err) {
+      setManualError(err?.message || "Gagal menyimpan pelamar.");
     } finally {
       setSavingManual(false);
     }
@@ -217,6 +227,59 @@ export default function CandidateList() {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal open={showManual} onClose={closeManual} title="Tambah Pelamar" width="max-w-4xl">
+        <form onSubmit={saveManual} className="space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Field label="Nama" >
+              <TextInput value={manual.nama_kandidat} onChange={(e) => setManualField("nama_kandidat", e.target.value)} required />
+            </Field>
+            <Field label="Posisi Dilamar">
+              <SelectInput value={manual.posisi_yang_dilamar} onChange={(e) => setManualField("posisi_yang_dilamar", e.target.value)} options={JABATAN_LIST} />
+            </Field>
+            <Field label="Hasil Interview">
+              <SelectInput value={manual.hasil_interview} onChange={(e) => setManualField("hasil_interview", e.target.value)} options={HASIL_INTERVIEW_LIST.filter((status) => status !== "Not Recommended")} required />
+            </Field>
+            <Field label="Pendidikan">
+              <SelectInput value={manual.pendidikan} onChange={(e) => setManualField("pendidikan", e.target.value)} options={PENDIDIKAN_LIST} />
+            </Field>
+            <Field label="Jurusan">
+              <TextInput value={manual.jurusan} onChange={(e) => setManualField("jurusan", e.target.value)} />
+            </Field>
+            <Field label="Agama">
+              <SelectInput value={manual.agama} onChange={(e) => setManualField("agama", e.target.value)} options={AGAMA_LIST} />
+            </Field>
+            <Field label="Info Lowongan">
+              <SelectInput value={manual.info_loker} onChange={(e) => setManualField("info_loker", e.target.value)} options={INFO_LOKER_LIST} />
+            </Field>
+            <Field label="Tanggal Interview">
+              <TextInput type="date" value={manual.tanggal_interview} onChange={(e) => setManualField("tanggal_interview", e.target.value)} required />
+            </Field>
+            <Field label="Tanggal Lahir">
+              <TextInput type="date" value={manual.tanggal_lahir} onChange={(e) => setManualField("tanggal_lahir", e.target.value)} />
+            </Field>
+            <Field label="Domisili">
+              <TextInput value={manual.domisili} onChange={(e) => setManualField("domisili", e.target.value)} />
+            </Field>
+            <Field label="No. HP">
+              <TextInput value={manual.no_hp} onChange={(e) => setManualField("no_hp", e.target.value)} />
+            </Field>
+            <Field label="Referensi">
+              <TextInput value={manual.keterangan_referensi} onChange={(e) => setManualField("keterangan_referensi", e.target.value)} />
+            </Field>
+          </div>
+          <Field label="Keterangan Tambahan">
+            <TextInput value={manual.keterangan_interview} onChange={(e) => setManualField("keterangan_interview", e.target.value)} />
+          </Field>
+          {manualError && <p className="text-xs text-status-red">{manualError}</p>}
+          <div className="flex justify-end gap-2 pt-2">
+            <GhostButton type="button" onClick={closeManual} disabled={savingManual}>Batal</GhostButton>
+            <PrimaryButton type="submit" disabled={savingManual}>
+              <Save size={15} /> {savingManual ? "Menyimpan..." : "Simpan Pelamar"}
+            </PrimaryButton>
+          </div>
+        </form>
       </Modal>
     </div>
   );
