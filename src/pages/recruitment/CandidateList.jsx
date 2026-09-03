@@ -10,6 +10,22 @@ import { exportToExcel } from "../../utils/exportExcel";
 import { formatDate } from "../../utils/formatDate";
 import { KRITERIA_PENILAIAN } from "../../lib/constants";
 
+const emptyManual = {
+  nama_kandidat: "",
+  posisi_yang_dilamar: "",
+  pendidikan: "",
+  jurusan: "",
+  agama: "",
+  info_loker: "",
+  tanggal_interview: "",
+  tanggal_lahir: "",
+  domisili: "",
+  no_hp: "",
+  keterangan_referensi: "",
+  keterangan_interview: "",
+  hasil_interview: "Recommended",
+};
+
 // "Data Peserta Wawancara" is no longer a separate archive table -- it's
 // interview_harian rows whose hasil_interview is Recommended or
 // Considered (Not Recommended stays only in Interview Harian).
