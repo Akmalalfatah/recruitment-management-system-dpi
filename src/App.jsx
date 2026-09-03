@@ -23,6 +23,8 @@ import IdCardList from "./pages/training/IdCardList";
 
 import PayrollTurnoverList from "./pages/payroll/TurnoverList";
 
+import UserManagement from "./pages/admin/userManagement";
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -60,6 +62,9 @@ export default function App() {
 
             {/* Payroll */}
             <Route path="/payroll/turnover" element={<PayrollTurnoverList />} />
+
+            {/* Super Admin */}
+            <Route path="/admin/users" element={<UserManagement />} />
           </Route>
 
           <Route path="/" element={<Navigate to="/dashboard" replace />} />

@@ -8,23 +8,7 @@ import StatusBadge from "../../components/common/StatusBadge";
 import Modal from "../../components/common/Modal";
 import { exportToExcel } from "../../utils/exportExcel";
 import { formatDate } from "../../utils/formatDate";
-import {
-  KRITERIA_PENILAIAN, PENDIDIKAN_LIST, AGAMA_LIST, INFO_LOKER_LIST, HASIL_INTERVIEW_LIST,
-} from "../../lib/constants";
-
-const emptyManual = {
-  nama_kandidat: "",
-  posisi_yang_dilamar: "",
-  pendidikan: "",
-  jurusan: "",
-  agama: "",
-  info_loker: "",
-  domisili: "",
-  no_hp: "",
-  tanggal_interview: "",
-  hasil_interview: "Recommended",
-  keterangan_interview: "",
-};
+import { KRITERIA_PENILAIAN } from "../../lib/constants";
 
 // "Data Peserta Wawancara" is no longer a separate archive table -- it's
 // interview_harian rows whose hasil_interview is Recommended or
@@ -159,61 +143,6 @@ export default function CandidateList() {
         )}
       </Card>
 
-      {/* Tambah pelamar tanpa proses interview di aplikasi (data lama) */}
-      <Modal open={showManual} onClose={() => setShowManual(false)} title="Tambah Pelamar (Tanpa Wawancara)" width="max-w-xl">
-        <form onSubmit={saveManual} className="space-y-4">
-          <p className="text-xs text-ink-500 -mt-1">
-            Untuk mencatat pelamar yang sudah ada sebelum aplikasi ini dipakai -- data langsung masuk ke daftar ini tanpa penilaian/skor.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Nama Kandidat">
-              <TextInput value={manual.nama_kandidat} onChange={(e) => setManualField("nama_kandidat", e.target.value)} required />
-            </Field>
-            <Field label="Posisi Dilamar">
-              <TextInput value={manual.posisi_yang_dilamar} onChange={(e) => setManualField("posisi_yang_dilamar", e.target.value)} required />
-            </Field>
-            <Field label="Pendidikan">
-              <SelectInput value={manual.pendidikan} onChange={(e) => setManualField("pendidikan", e.target.value)} options={PENDIDIKAN_LIST} />
-            </Field>
-            <Field label="Jurusan">
-              <TextInput value={manual.jurusan} onChange={(e) => setManualField("jurusan", e.target.value)} placeholder="-" />
-            </Field>
-            <Field label="Agama">
-              <SelectInput value={manual.agama} onChange={(e) => setManualField("agama", e.target.value)} options={AGAMA_LIST} />
-            </Field>
-            <Field label="Info Lowongan">
-              <SelectInput value={manual.info_loker} onChange={(e) => setManualField("info_loker", e.target.value)} options={INFO_LOKER_LIST} />
-            </Field>
-            <Field label="Domisili">
-              <TextInput value={manual.domisili} onChange={(e) => setManualField("domisili", e.target.value)} />
-            </Field>
-            <Field label="No. HP">
-              <TextInput value={manual.no_hp} onChange={(e) => setManualField("no_hp", e.target.value)} />
-            </Field>
-            <Field label="Tanggal Interview / Data">
-              <TextInput type="date" value={manual.tanggal_interview} onChange={(e) => setManualField("tanggal_interview", e.target.value)} />
-            </Field>
-            <Field label="Hasil Interview">
-              <SelectInput
-                value={manual.hasil_interview}
-                onChange={(e) => setManualField("hasil_interview", e.target.value)}
-                options={HASIL_INTERVIEW_LIST.filter((h) => h !== "Not Recommended")}
-                required
-              />
-            </Field>
-          </div>
-          <Field label="Keterangan">
-            <TextInput value={manual.keterangan_interview} onChange={(e) => setManualField("keterangan_interview", e.target.value)} placeholder="-" />
-          </Field>
-          <div className="flex justify-end gap-2 pt-2">
-            <GhostButton type="button" onClick={() => setShowManual(false)}>Batal</GhostButton>
-            <PrimaryButton type="submit" disabled={savingManual}>
-              <Save size={14} /> {savingManual ? "Menyimpan..." : "Simpan"}
-            </PrimaryButton>
-          </div>
-        </form>
-      </Modal>
-
       <Modal open={!!active} onClose={() => setActive(null)} title="Detail Peserta Wawancara">
         {active && (
           <div className="space-y-5 text-sm">
@@ -260,7 +189,7 @@ export default function CandidateList() {
                       <div>
                         <p className="text-sm font-semibold text-ink-900">{h.turnover?.nomor_turnover || "-"}</p>
                         <p className="text-[11px] text-ink-500">
-                          {h.turnover?.jabatan || "-"} — diajukan {formatDate(h.assigned_at)}
+                          {[h.turnover?.jabatan, h.turnover?.area_penempatan].filter(Boolean).join(" - ") || "-"} — diajukan {formatDate(h.assigned_at)}
                           {h.unassigned_at ? ` s.d. ${formatDate(h.unassigned_at)}` : " (masih aktif)"}
                         </p>
                       </div>

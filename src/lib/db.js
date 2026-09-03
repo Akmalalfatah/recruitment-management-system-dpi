@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from "./supabaseClient";
+import { supabase, supabaseAuthAux, isSupabaseConfigured } from "./supabaseClient";
 import { mockAdapter } from "./mockAdapter";
 
 // -----------------------------------------------------------------------
@@ -268,6 +268,54 @@ export const notificationsApi = {
       })
       .subscribe();
     return () => supabase.removeChannel(channel);
+  },
+};
+
+// -----------------------------------------------------------------------
+// Super Admin only: CRUD user accounts (login + profile in one). RLS on
+// `users` only allows Super_Admin to insert/update/delete other users'
+// rows -- see the SQL patch that adds those policies.
+// -----------------------------------------------------------------------
+export const userApi = {
+  async list() {
+    if (!isSupabaseConfigured) return mockAdapter.listUsers();
+    const { data, error } = await supabase.from("users").select("*").order("name");
+    if (error) throw error;
+    return data;
+  },
+  // Creates both the Supabase Auth login AND the `users` profile row.
+  // Uses `supabaseAuthAux` (a separate, non-persisted client) for the
+  // signUp step specifically so it never replaces the Super Admin's own
+  // active session in this browser tab.
+  async create({ name, email, password, role, area_penempatan }) {
+    if (!isSupabaseConfigured) return mockAdapter.createUser({ name, email, password, role, area_penempatan });
+    const { data: signUpData, error: signUpError } = await supabaseAuthAux.auth.signUp({ email, password });
+    if (signUpError) throw signUpError;
+    if (!signUpData.user) throw new Error("Gagal membuat akun -- coba lagi.");
+    const { data: profile, error: perr } = await supabase
+      .from("users")
+      .insert({ id: signUpData.user.id, name, email, role, area_penempatan: area_penempatan || null })
+      .select()
+      .single();
+    if (perr) throw perr;
+    return profile;
+  },
+  async update(id, patch) {
+    if (!isSupabaseConfigured) return mockAdapter.updateUser(id, patch);
+    const { data, error } = await supabase.from("users").update(patch).eq("id", id).select().single();
+    if (error) throw error;
+    return data;
+  },
+  // Removes the profile row only (locks the account out of the app --
+  // ProtectedRoute requires a matching `users` row to resolve a role).
+  // The underlying Supabase Auth login itself can only be fully deleted
+  // from the Supabase Dashboard (Authentication -> Users) or via the
+  // admin API with a service-role key, which this client-only app
+  // intentionally never holds.
+  async remove(id) {
+    if (!isSupabaseConfigured) return mockAdapter.removeUser(id);
+    const { error } = await supabase.from("users").delete().eq("id", id);
+    if (error) throw error;
   },
 };
 

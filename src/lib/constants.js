@@ -69,6 +69,9 @@ export const STATUS_BADGE_STYLE = {
   "Dihold Sementara": "bg-status-red",
   "Masih Diajukan": "bg-status-blue",
   Dilepas: "bg-ink-300",
+  // User account status
+  Active: "bg-status-green",
+  Inactive: "bg-ink-300",
 };
 
 export const JABATAN_LIST = [
@@ -137,5 +140,3 @@ export const ID_CARD_STATUS = {
 // fixed default and is typed by OPS on the form).
 export const ERS_DISETUJUI_1_DEFAULT = "R. STEVE TIYANTOKO";
 export const ERS_DITERIMA_DEFAULT = "AGARISMAN KRISTOAJI";
-
-

@@ -243,7 +243,11 @@ function delay(ms = 120) {
 }
 
 // ---- Demo credentials (email -> password) -----------------------------
-const DEMO_CREDENTIALS = {
+// Mutable so Super Admin's "Tambah User" in demo mode can register new
+// logins too -- persisted alongside the rest of the demo DB so it
+// survives a page refresh.
+const CREDS_KEY = "dpi_demo_creds_v1";
+const BASE_DEMO_CREDENTIALS = {
   "admin@dpi.co.id": "admin123",
   "ops@dpi.co.id": "ops123",
   "er@dpi.co.id": "er123",
@@ -251,6 +255,17 @@ const DEMO_CREDENTIALS = {
   "training@dpi.co.id": "train123",
   "payroll@dpi.co.id": "pay123",
 };
+function loadCreds() {
+  const raw = localStorage.getItem(CREDS_KEY);
+  return { ...BASE_DEMO_CREDENTIALS, ...(raw ? JSON.parse(raw) : {}) };
+}
+function saveCred(email, password) {
+  const extra = localStorage.getItem(CREDS_KEY);
+  const parsed = extra ? JSON.parse(extra) : {};
+  parsed[email.toLowerCase()] = password;
+  localStorage.setItem(CREDS_KEY, JSON.stringify(parsed));
+}
+const DEMO_CREDENTIALS = BASE_DEMO_CREDENTIALS;
 
 export const mockAdapter = {
   DEMO_CREDENTIALS,
@@ -259,7 +274,8 @@ export const mockAdapter = {
     await delay();
     const db = loadDb();
     const user = db.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
-    if (!user || DEMO_CREDENTIALS[user.email] !== password) {
+    const creds = loadCreds();
+    if (!user || creds[user.email.toLowerCase()] !== password) {
       throw new Error("Email atau password salah.");
     }
     localStorage.setItem(SESSION_KEY, JSON.stringify(user));
@@ -274,6 +290,43 @@ export const mockAdapter = {
   async getSession() {
     const raw = localStorage.getItem(SESSION_KEY);
     return raw ? JSON.parse(raw) : null;
+  },
+
+  // ---- Super Admin: CRUD user (demo mode) --------------------------------
+  async listUsers() {
+    await delay();
+    const db = loadDb();
+    return [...db.users].sort((a, b) => a.name.localeCompare(b.name));
+  },
+
+  async createUser({ name, email, password, role, area_penempatan }) {
+    await delay();
+    const db = loadDb();
+    if (db.users.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
+      throw new Error("Email ini sudah dipakai user lain.");
+    }
+    const rec = { id: uid("user"), name, email, role, area_penempatan: area_penempatan || null, status: "Active" };
+    db.users.push(rec);
+    saveDb(db);
+    saveCred(email, password);
+    return rec;
+  },
+
+  async updateUser(id, patch) {
+    await delay();
+    const db = loadDb();
+    const idx = db.users.findIndex((u) => u.id === id);
+    if (idx === -1) throw new Error("User tidak ditemukan.");
+    db.users[idx] = { ...db.users[idx], ...patch };
+    saveDb(db);
+    return db.users[idx];
+  },
+
+  async removeUser(id) {
+    await delay();
+    const db = loadDb();
+    db.users = db.users.filter((u) => u.id !== id);
+    saveDb(db);
   },
 
   async listErs({ dateFrom, dateTo } = {}) {

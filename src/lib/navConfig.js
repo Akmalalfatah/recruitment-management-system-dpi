@@ -1,7 +1,7 @@
 import { ROLES } from "./constants";
 import {
   LayoutDashboard, FolderCog, FileText, UserPlus, Users, ClipboardList,
-  GraduationCap, IdCardIcon, Wallet, Users2,
+  GraduationCap, IdCardIcon, Wallet, Users2, ShieldCheck,
 } from "lucide-react";
 
 // Each entry: { label, path, icon, group } OR a group header { group, icon, children:[{label,path}] }
@@ -62,6 +62,10 @@ NAV_BY_ROLE[ROLES.SUPER_ADMIN] = [
   NAV_BY_ROLE[ROLES.HR_RECRUITMENT][1],
   NAV_BY_ROLE[ROLES.HR_TRAINING][1],
   NAV_BY_ROLE[ROLES.HR_PAYROLL][1],
+  {
+    group: "Administrasi", icon: ShieldCheck,
+    children: [{ label: "Manajemen User", path: "/admin/users", icon: Users }],
+  },
 ];
 
 export const ROUTE_ACCESS = {
@@ -70,7 +74,7 @@ export const ROUTE_ACCESS = {
   [ROLES.HR_RECRUITMENT]: ["/dashboard", "/recruitment"],
   [ROLES.HR_TRAINING]: ["/dashboard", "/training"],
   [ROLES.HR_PAYROLL]: ["/dashboard", "/payroll"],
-  [ROLES.SUPER_ADMIN]: ["/dashboard", "/ops", "/er", "/recruitment", "/training", "/payroll"],
+  [ROLES.SUPER_ADMIN]: ["/dashboard", "/ops", "/er", "/recruitment", "/training", "/payroll", "/admin"],
 };
 
 export function canAccess(role, pathname) {

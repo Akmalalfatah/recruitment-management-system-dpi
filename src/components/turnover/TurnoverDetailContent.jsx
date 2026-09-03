@@ -17,7 +17,8 @@ export default function TurnoverDetailContent({ record }) {
       <div className="flex items-center justify-between mb-4">
         <div>
           <p className="font-bold text-ink-900">{record.nomor_turnover}</p>
-          <p className="text-xs text-ink-500">{record.area_penempatan || "-"}</p>
+          <p className="text-sm font-semibold text-ink-900 mt-1">{record.jabatan}</p>
+          <p className="text-xs text-ink-500">Lokasi Penempatan: {record.area_penempatan || "-"}</p>
         </div>
         <StatusBadge status={record.status} />
       </div>

@@ -13,3 +13,15 @@ export const supabase = isSupabaseConfigured
       auth: { persistSession: true, autoRefreshToken: true },
     })
   : null;
+
+// Separate, non-persisted client used ONLY when Super Admin creates a new
+// user account (supabase.auth.signUp switches the CALLING client's active
+// session to the newly created user -- undesirable when it's an admin
+// creating an account on someone else's behalf). Using an isolated client
+// here means signUp() never touches the main `supabase` client's session,
+// so the admin stays logged in as themselves throughout.
+export const supabaseAuthAux = isSupabaseConfigured
+  ? createClient(url, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+  : null;
