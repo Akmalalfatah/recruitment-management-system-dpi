@@ -4,7 +4,6 @@ import {
   GraduationCap, IdCardIcon, Wallet, Users2, ShieldCheck,
 } from "lucide-react";
 
-// Each entry: { label, path, icon, group } OR a group header { group, icon, children:[{label,path}] }
 export const NAV_BY_ROLE = {
   [ROLES.OPS]: [
     { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
@@ -54,7 +53,6 @@ export const NAV_BY_ROLE = {
   ],
 };
 
-// Super admin sees everything
 NAV_BY_ROLE[ROLES.SUPER_ADMIN] = [
   NAV_BY_ROLE[ROLES.OPS][0],
   NAV_BY_ROLE[ROLES.OPS][1],

@@ -31,8 +31,6 @@ export default function IdCardList() {
     load();
   }, [load]);
 
-  // Redraw the live ID card preview any time the active record or its
-  // photo changes, so the person sees exactly what will be downloaded.
   useEffect(() => {
     if (!active || !previewRef.current) return;
     let cancelled = false;

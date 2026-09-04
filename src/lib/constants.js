@@ -1,5 +1,3 @@
-// Domain-wide constants for DPI Recruitment & Turnover System
-
 export const ROLES = {
   SUPER_ADMIN: "Super_Admin",
   OPS: "OPS",
@@ -18,7 +16,6 @@ export const ROLE_LABELS = {
   [ROLES.HR_PAYROLL]: "Payroll",
 };
 
-// Which module landing path each role goes to first
 export const ROLE_HOME = {
   [ROLES.SUPER_ADMIN]: "/dashboard",
   [ROLES.OPS]: "/dashboard",
@@ -28,11 +25,6 @@ export const ROLE_HOME = {
   [ROLES.HR_PAYROLL]: "/dashboard",
 };
 
-// 7-stage manual pipeline for turnover.status. Only Recruitment can move a
-// turnover through these (enforced in the DB too, see
-// supabase/migration_v11_turnover_status_riwayat.sql). "Terpilih" is the
-// completed/"selesai" state -- it's still set AUTOMATICALLY the instant a
-// candidate is marked Hired, never picked manually.
 export const TURNOVER_STATUS_LIST = [
   "Belum Kirim", "Sudah Kirim", "Pengurangan", "Interview User",
   "Terpilih", "Menunggu Info User", "Dihold Sementara",
@@ -59,7 +51,6 @@ export const STATUS_BADGE_STYLE = {
   "Not Hired": "bg-status-teal",
   "Belum Hired": "bg-ink-300",
   "-": "bg-ink-300",
-  // Turnover's 7-stage pipeline
   "Belum Kirim": "bg-ink-300",
   "Sudah Kirim": "bg-status-blue",
   Pengurangan: "bg-status-orange",
@@ -69,7 +60,6 @@ export const STATUS_BADGE_STYLE = {
   "Dihold Sementara": "bg-status-red",
   "Masih Diajukan": "bg-status-blue",
   Dilepas: "bg-ink-300",
-  // User account status
   Active: "bg-status-green",
   Inactive: "bg-ink-300",
 };
@@ -92,10 +82,6 @@ export const ALASAN_ERS_LIST = [
   "PENGGANTI HABIS KONTRAK", "PENAMBAHAN HEADCOUNT", "PENGGANTI RESIGN", "PENGGANTI TERMINASI",
 ];
 
-// Divisi yang membuat ERS selalu tetap "OPR BCA.1" -- hanya divisi OPR yang
-// berwenang mengajukan ERS, jadi field ini tidak pernah diinput manual di
-// form, cukup konstanta ini yang dipakai di seluruh alur (form, mock data,
-// dan penomoran otomatis nomor ERS).
 export const OPS_DIVISI = "OPR BCA.1";
 
 export const PENDIDIKAN_LIST = ["SMA/K", "D3", "D4", "S1", "S2"];
@@ -108,9 +94,6 @@ export const INFO_LOKER_LIST = [
 
 export const HASIL_INTERVIEW_LIST = ["Recommended", "Considered", "Not Recommended"];
 
-// Fixed recruiter roster -- used both for Turnover's "Nama Rekruter" and
-// Interview Harian's "Nama Koordinator / Rekruter" so the same list of
-// names is picked from consistently everywhere instead of free text.
 export const REKRUTER_LIST = [
   "Febri", "Eka", "Anton", "Reggy", "Widad", "Dinda", "Ryan", "Rani", "Rodrik", "Bayu", "Redi", "Puja",
 ];
@@ -135,8 +118,5 @@ export const ID_CARD_STATUS = {
   COMPLETED: "Completed",
 };
 
-// Signature-block defaults on the ERS form/PDF (Disetujui-1 & Diterima are
-// always the same person and are never typed manually; Disetujui-2 has no
-// fixed default and is typed by OPS on the form).
 export const ERS_DISETUJUI_1_DEFAULT = "R. STEVE TIYANTOKO";
 export const ERS_DITERIMA_DEFAULT = "AGARISMAN KRISTOAJI";

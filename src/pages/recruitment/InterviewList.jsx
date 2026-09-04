@@ -11,23 +11,12 @@ import { exportToExcel } from "../../utils/exportExcel";
 import { formatDate } from "../../utils/formatDate";
 import { KRITERIA_PENILAIAN, REKRUTER_LIST } from "../../lib/constants";
 
-// Interview harian is now independent of turnover -- hiring decisions are
-// made from the Turnover edit screen (Recruitment > Turnover), not here.
-// There's no manual Hold/Dibuang choice anymore either: whether a
-// candidate shows up on "Data Peserta Wawancara" is derived automatically
-// from hasil_interview once it's set -- Recommended/Considered are kept,
-// Not Recommended stays only in this list.
 const emptyScores = { komunikasi: 3, penampilan: 3, pengetahuan_pekerjaan: 3, keterampilan: 3, pengalaman_kerja: 3 };
 
 function totalNilai(scores) {
   return KRITERIA_PENILAIAN.reduce((sum, k) => sum + (Number(scores[k.key]) || 0) * (k.bobot ?? 1), 0);
 }
 
-// Hasil interview sekarang ditentukan otomatis dari total nilai (5 aspek x
-// bobot 20, skala 100-500), bukan dipilih manual lagi:
-//   >= 350        -> Recommended
-//   250 - 349     -> Considered
-//   < 250         -> Not Recommended
 function computeHasilInterview(total) {
   if (total >= 350) return "Recommended";
   if (total >= 250) return "Considered";
@@ -59,9 +48,6 @@ export default function InterviewList() {
     load();
   }, [load]);
 
-  // Client-side filter by Nama Koordinator/Rekruter -- keeps the query
-  // shape simple (still just dateFrom/dateTo server-side) while letting
-  // Recruitment narrow the list down to one recruiter's candidates.
   const filteredRows = rekruterFilter ? rows.filter((r) => r.nama_koordinator === rekruterFilter) : rows;
 
   function openDetail(row) {
@@ -161,7 +147,6 @@ export default function InterviewList() {
         {loading ? <p className="text-sm text-ink-500 py-6 text-center">Memuat data...</p> : <DataTable columns={columns} rows={filteredRows} />}
       </Card>
 
-      {/* Read-only detail */}
       <Modal open={!!active} onClose={() => setActive(null)} title="Detail Interview Kandidat">
         {active && (
           <div className="space-y-4 text-sm">
@@ -204,7 +189,6 @@ export default function InterviewList() {
         )}
       </Modal>
 
-      {/* Edit: penilaian & hasil interview */}
       <Modal open={!!editRow} onClose={() => setEditRow(null)} title="Edit Nilai & Hasil Interview" width="max-w-lg">
         {editRow && (
           <div className="space-y-5">

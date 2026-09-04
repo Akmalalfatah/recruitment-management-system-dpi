@@ -38,7 +38,7 @@ export default function InterviewForm() {
     try {
       await interviewApi.create({
         ...form,
-        turnover_id: null, // diajukan ke turnover belakangan, dari layar Turnover
+        turnover_id: null, 
         nama_koordinator: form.nama_koordinator || "-",
         tenggat_waktu_proses: 7,
         keterangan_banding: "-",

@@ -13,16 +13,12 @@ const STATUS_OPTIONS = ["Active", "Inactive"];
 
 const emptyForm = { name: "", email: "", password: "", role: "", area_penempatan: "", status: "Active" };
 
-// Super Admin only -- create, edit role/status, and remove user accounts.
-// Creating a user provisions BOTH the Supabase Auth login and the profile
-// row in one step; see userApi.create in src/lib/db.js for how the admin's
-// own session is kept safe from being replaced during that step.
 export default function UserManagement() {
   const { user: me } = useAuth();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState(null); // null = creating new, object = editing existing
+  const [editing, setEditing] = useState(null); 
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -66,9 +62,6 @@ export default function UserManagement() {
     setSaving(true);
     try {
       if (editing) {
-        // Email/password tidak diubah lewat sini -- ganti password akun
-        // dilakukan lewat "Lupa Password" di halaman login, atau langsung
-        // di Supabase Dashboard kalau perlu di-reset paksa oleh admin.
         await userApi.update(editing.id, {
           name: form.name,
           role: form.role,

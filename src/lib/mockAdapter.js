@@ -1,19 +1,5 @@
 import { ROLES, OPS_DIVISI, ERS_DISETUJUI_1_DEFAULT, ERS_DITERIMA_DEFAULT } from "./constants";
 
-// -----------------------------------------------------------------------
-// Local, in-browser demo database. Persists to localStorage so the app is
-// fully click-through-able without a real Supabase project. The shape of
-// every record mirrors the Supabase schema in /supabase/schema.sql, so
-// swapping this adapter for real Supabase calls in db.js is a drop-in.
-//
-// v10: turnover is now ONLY ever created automatically (mirrors trigger
-// `ers_document_create_turnover`) when an ERS is Accepted -- there's no
-// createTurnover exposed to OPS anymore. interview_harian no longer needs
-// a turnover_id at creation, and there's no more separate candidate-pool
-// table -- "Data Peserta Wawancara" is derived from hasil_interview being
-// Recommended/Considered.
-// -----------------------------------------------------------------------
-
 const DB_KEY = "dpi_demo_db_v2";
 const SESSION_KEY = "dpi_demo_session_v1";
 const NOTIF_READS_KEY = "dpi_demo_notif_reads_v1";
@@ -74,8 +60,6 @@ function seed() {
     },
   ];
 
-  // Only ers_2 is Accepted in the seed, so only it has an auto-created
-  // turnover -- mirrors what the real trigger would have done.
   const turnover = [
     {
       id: "to_2", area_penempatan: "BCA Wisma Pluit", created_by: "u_ops", ers_document_id: "ers_2",
@@ -98,8 +82,6 @@ function seed() {
       keterangan_banding: "-", status: "Recommended", hire_status: "-",
     },
     {
-      // Independent interview: no turnover yet, tapi hasil Recommended/
-      // Considered jadi otomatis muncul di Data Peserta Wawancara.
       id: "int_2", turnover_id: null, nama_koordinator: "Jeje", tenggat_waktu_proses: 5,
       tanggal_interview: todayMinus(1), nama_kandidat: "Elyani Feronica", no_hp: "081298765432",
       posisi_yang_dilamar: "Administrasi", domisili: "Jakarta Pusat", pendidikan: "SMA/K", jurusan: "-",
@@ -109,8 +91,6 @@ function seed() {
       keterangan_banding: "-", status: "Pending", hire_status: "-",
     },
     {
-      // Not Recommended -- tetap ada di Interview Harian saja, tidak pernah
-      // muncul di Data Peserta Wawancara.
       id: "int_3", turnover_id: null, nama_koordinator: "Ananda", tenggat_waktu_proses: 10,
       tanggal_interview: todayMinus(8), nama_kandidat: "Ahmad Yani", no_hp: "081211122233",
       posisi_yang_dilamar: "Teknisi AC", domisili: "Tangerang", pendidikan: "D3", jurusan: "Teknik Mesin",
@@ -122,7 +102,6 @@ function seed() {
     },
   ];
 
-  // Riwayat pengajuan turnover per kandidat -- mirrors interview_turnover_log.
   const interview_turnover_log = [
     { id: "log_1", interview_harian_id: "int_1", turnover_id: "to_2", assigned_at: `${todayMinus(2)}T09:05:00.000Z`, unassigned_at: null, outcome: null },
   ];
@@ -144,7 +123,6 @@ function loadDb() {
     try {
       return JSON.parse(raw);
     } catch {
-      // fall through to reseed
     }
   }
   const fresh = seed();
@@ -156,10 +134,6 @@ function saveDb(db) {
   localStorage.setItem(DB_KEY, JSON.stringify(db));
 }
 
-// Mirrors the real Supabase triggers in supabase/schema.sql (notify_*
-// functions) so demo mode behaves the same way before you ever connect a
-// real project: every important action drops a row into the shared
-// activity feed that the Header bell reads from.
 function pushNotification(db, type, title, message, relatedId) {
   db.notifications = db.notifications || [];
   db.notifications.unshift({
@@ -172,9 +146,6 @@ function pushNotification(db, type, title, message, relatedId) {
   });
 }
 
-// Mirrors trigger `ers_document_create_turnover`: the instant an ERS is
-// Accepted, auto-create its turnover (idempotent -- one per ERS, mirrors
-// the `ers_document_id unique` constraint via the `find` guard below).
 function autoCreateTurnoverForErs(db, ers) {
   db.turnover = db.turnover || [];
   const already = db.turnover.find((t) => t.ers_document_id === ers.id);
@@ -212,9 +183,6 @@ function autoCreateTurnoverForErs(db, ers) {
   return rec;
 }
 
-// Mirrors trigger `interview_log_turnover_assignment`: close the log entry
-// for the assignment that just ended (if any) and open a new one for the
-// assignment that just started (if any).
 function logTurnoverAssignmentChange(db, rec, prevTurnoverId, outcomeAtClose) {
   db.interview_turnover_log = db.interview_turnover_log || [];
   if (prevTurnoverId) {
@@ -242,10 +210,6 @@ function delay(ms = 120) {
   return new Promise((res) => setTimeout(res, ms));
 }
 
-// ---- Demo credentials (email -> password) -----------------------------
-// Mutable so Super Admin's "Tambah User" in demo mode can register new
-// logins too -- persisted alongside the rest of the demo DB so it
-// survives a page refresh.
 const CREDS_KEY = "dpi_demo_creds_v1";
 const BASE_DEMO_CREDENTIALS = {
   "admin@dpi.co.id": "admin123",
@@ -292,7 +256,6 @@ export const mockAdapter = {
     return raw ? JSON.parse(raw) : null;
   },
 
-  // ---- Super Admin: CRUD user (demo mode) --------------------------------
   async listUsers() {
     await delay();
     const db = loadDb();
@@ -341,10 +304,7 @@ export const mockAdapter = {
     await delay();
     const db = loadDb();
     const now = new Date();
-    // Divisi selalu tetap OPS_DIVISI ("OPR BCA.1") -- hanya OPR yang boleh
-    // membuat ERS, jadi nilai kiriman form (jika ada) diabaikan.
     const divisi = OPS_DIVISI;
-    // Nomor ERS mengikuti pola dokumen asli: {urut}/{Divisi}/ERS/{tahun}.
     const seqInDivisi = db.ers_document.filter((e) => e.divisi === divisi).length + 1;
     const nomor_ers = `${String(seqInDivisi).padStart(5, "0")}/${divisi}/ERS/${now.getFullYear()}`;
     const rec = {
@@ -354,8 +314,8 @@ export const mockAdapter = {
       disetujui_1: ERS_DISETUJUI_1_DEFAULT,
       diterima_oleh: ERS_DITERIMA_DEFAULT,
       status: "Pending",
-      created_at: now.toISOString().slice(0, 10), // dipakai untuk filter tanggal
-      submitted_at: now.toISOString(), // timestamp lengkap, dipakai di kolom "Pemohon" pada PDF
+      created_at: now.toISOString().slice(0, 10), 
+      submitted_at: now.toISOString(), 
       ...payload,
     };
     db.ers_document.unshift(rec);
@@ -364,10 +324,6 @@ export const mockAdapter = {
     return rec;
   },
 
-  // Accepting an ERS auto-creates its turnover, mirroring the real
-  // Supabase trigger `ers_document_create_turnover`. Once an ERS is
-  // Accepted or Rejected, its status is final -- mirrors trigger
-  // `ers_document_lock_status`.
   async updateErsStatus(id, status) {
     await delay();
     const db = loadDb();
@@ -400,8 +356,6 @@ export const mockAdapter = {
     return db.turnover.find((x) => x.id === id) || null;
   },
 
-  // Generic patch: dates, keterangan_proses, status, etc. -- used by both
-  // ER's simple edit and Recruitment's richer edit screen.
   async updateTurnover(id, patch) {
     await delay();
     const db = loadDb();
@@ -432,9 +386,6 @@ export const mockAdapter = {
       .sort((a, b) => (a.tanggal_interview < b.tanggal_interview ? 1 : -1));
   },
 
-  // "Data Peserta Wawancara": whether a candidate shows up here is derived
-  // automatically from hasil_interview -- Recommended/Considered are kept,
-  // Not Recommended stays only in Interview Harian. No manual choice.
   async listHoldInterviews({ dateFrom, dateTo } = {}) {
     await delay();
     const db = loadDb();
@@ -444,9 +395,6 @@ export const mockAdapter = {
       .sort((a, b) => (a.tanggal_interview < b.tanggal_interview ? 1 : -1));
   },
 
-  // Candidates Recruitment can pick from when "mengajukan peserta" to a
-  // turnover: Recommended/Considered + not yet assigned anywhere. A Hired
-  // candidate always keeps turnover_id set, so never appears here.
   async listAvailablePool() {
     await delay();
     const db = loadDb();
@@ -455,8 +403,6 @@ export const mockAdapter = {
       .sort((a, b) => (a.tanggal_interview < b.tanggal_interview ? 1 : -1));
   },
 
-  // "Riwayat pengajuan": every turnover this candidate has ever been
-  // proposed to, most recent first.
   async listInterviewHistory(interviewId) {
     await delay();
     const db = loadDb();
@@ -466,9 +412,6 @@ export const mockAdapter = {
       .sort((a, b) => (a.assigned_at < b.assigned_at ? 1 : -1));
   },
 
-  // "Peserta yang Tidak Terpilih" on the Turnover edit screen: every
-  // candidate ever proposed to THIS turnover and later released, not just
-  // whoever is currently attached.
   async listTurnoverCandidateHistory(turnoverId) {
     await delay();
     const db = loadDb();
@@ -512,9 +455,6 @@ export const mockAdapter = {
     const prevTurnoverId = rec.turnover_id;
 
     if ("turnover_id" in patch && patch.turnover_id !== prevTurnoverId) {
-      // Mirrors trg_interview_check_turnover_open_upd: a Hired candidate
-      // can never be moved/unassigned; a closed (Terpilih) turnover can't
-      // accept new candidates.
       if (prevHireStatus === "Hired") {
         throw new Error("Kandidat ini sudah Hired, tidak bisa dipindah/diajukan ke turnover lain.");
       }
@@ -527,16 +467,10 @@ export const mockAdapter = {
     }
 
     Object.assign(rec, patch);
-
-    // Mirrors trg_interview_log_turnover_assignment: keep "riwayat
-    // pengajuan" (interview_turnover_log) in sync whenever turnover_id
-    // actually changes.
     if ("turnover_id" in patch && patch.turnover_id !== prevTurnoverId) {
       logTurnoverAssignmentChange(db, rec, prevTurnoverId, prevHireStatus);
     }
 
-    // Mirrors trg_turnover_sync_karyawan_baru: hire/un-hire syncs the
-    // linked turnover's nama_karyawan_baru + auto-completes it ("Terpilih").
     if (rec.turnover_id && "hire_status" in patch) {
       const t = db.turnover.find((x) => x.id === rec.turnover_id);
       if (t) {
@@ -558,10 +492,6 @@ export const mockAdapter = {
         `${rec.nama_kandidat || "-"} dinyatakan hired untuk posisi ${rec.posisi_yang_dilamar || "-"}. ID Card sedang diproses Training.`,
         rec.id
       );
-      // trg_interview_harian_auto_not_hire_siblings: every OTHER candidate
-      // assigned to this same turnover is no longer needed once one is
-      // Hired -- auto-flip them to Not Hired AND free them back to the
-      // pool (turnover_id cleared) so they're proposable elsewhere.
       db.interview_harian
         .filter((i) => i.turnover_id === rec.turnover_id && i.id !== rec.id && i.hire_status !== "Hired")
         .forEach((sibling) => {
@@ -576,8 +506,6 @@ export const mockAdapter = {
     return rec;
   },
 
-  // "Dibuang" -- the row is removed outright, there is no DB-side status
-  // for it (mirrors the real DELETE the app issues against Supabase).
   async deleteInterview(id) {
     await delay();
     const db = loadDb();
@@ -631,7 +559,6 @@ export const mockAdapter = {
     const exists = db.id_card_process.find((c) => c.recruitment_id === interviewId);
     if (exists) return exists;
     const now = new Date();
-    // Nomor induk karyawan sederhana: {tahun}{urut 4 digit}, mis. "20260007".
     const seq = db.id_card_process.length + 1;
     const nomor_karyawan = `${now.getFullYear()}${String(seq).padStart(4, "0")}`;
     const rec = {

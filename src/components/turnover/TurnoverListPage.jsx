@@ -10,16 +10,6 @@ import TurnoverDetailContent from "./TurnoverDetailContent";
 import { exportTurnoverExcel } from "../../utils/exportExcel";
 import { formatDate } from "../../utils/formatDate";
 
-/**
- * variant: "area" -> columns show Area Penempatan / Jabatan / Karyawan Lama (OPS, Recruitment, Training)
- *          "swap"  -> columns show Jabatan / Karyawan Keluar / Karyawan Baru (ER, Payroll)
- * editable: when true (ER only) allows editing keterangan proses from the detail modal.
- *           Status itself is Recruitment-only (see pages/recruitment/TurnoverList.jsx)
- *           and is always shown here as a read-only badge.
- * showCandidates: when true (OPS, ER, Payroll) shows a read-only "Peserta
- *           Diajukan" list in the detail modal -- view only, no actions.
- * addButton: { label, to } renders a "+" call-to-action
- */
 export default function TurnoverListPage({ heading, moduleLabel, variant = "area", editable = false, showCandidates = false, addButton = null }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);

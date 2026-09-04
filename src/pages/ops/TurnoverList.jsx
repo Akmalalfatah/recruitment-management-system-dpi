@@ -44,7 +44,7 @@ export default function RecruitmentTurnoverList() {
 
   const [draft, setDraft] = useState(emptyDraft);
   const [saving, setSaving] = useState(false);
-  const [busyId, setBusyId] = useState(null); // interview id currently being assigned/unassigned/hired
+  const [busyId, setBusyId] = useState(null); 
   const [candidateDetail, setCandidateDetail] = useState(null);
 
   const load = useCallback(() => {
@@ -220,8 +220,6 @@ export default function RecruitmentTurnoverList() {
               <StatusBadge status={active.status} />
             </div>
 
-            {/* Diambil otomatis dari ERS sumbernya -- sudah diisi OPS waktu
-                bikin ERS, jadi tidak perlu diisi ulang manual di sini. */}
             <div className="grid grid-cols-2 gap-4 bg-surface-100/60 border border-surface-border px-3 py-2.5 text-xs">
               <div>
                 <p className="text-ink-500 font-medium mb-0.5">Alasan Keluar</p>
@@ -241,7 +239,6 @@ export default function RecruitmentTurnoverList() {
               </div>
             )}
 
-            {/* ---- Editable process fields ---- */}
             <div>
               <p className="text-xs font-semibold text-ink-700 uppercase tracking-wide mb-3">Data &amp; Tanggal Proses</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -308,7 +305,6 @@ export default function RecruitmentTurnoverList() {
               </div>
             </div>
 
-            {/* ---- Assigned candidates ---- */}
             <div className="pt-4 border-t border-surface-border">
               <p className="text-xs font-semibold text-ink-700 uppercase tracking-wide mb-3">Peserta Diajukan</p>
               {detailLoading ? (
@@ -348,7 +344,6 @@ export default function RecruitmentTurnoverList() {
               )}
             </div>
 
-            {/* ---- History: candidates once proposed here but not picked ---- */}
             <div className="pt-4 border-t border-surface-border">
               <p className="text-xs font-semibold text-ink-700 uppercase tracking-wide mb-3">
                 Riwayat Peserta yang Tidak Terpilih
@@ -379,7 +374,6 @@ export default function RecruitmentTurnoverList() {
               )}
             </div>
 
-            {/* ---- Pick more candidates from the pool, or source new ones directly ---- */}
             <div className="pt-4 border-t border-surface-border">
               <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                 <p className="text-xs font-semibold text-ink-700 uppercase tracking-wide">Pilih Peserta dari Data Peserta Wawancara</p>

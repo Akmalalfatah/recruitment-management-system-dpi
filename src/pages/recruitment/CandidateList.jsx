@@ -26,9 +26,6 @@ const emptyManual = {
   hasil_interview: "Recommended",
 };
 
-// "Data Peserta Wawancara" is no longer a separate archive table -- it's
-// interview_harian rows whose hasil_interview is Recommended or
-// Considered (Not Recommended stays only in Interview Harian).
 export default function CandidateList() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -54,8 +51,6 @@ export default function CandidateList() {
     load();
   }, [load]);
 
-  // Same weighted formula as Interview Harian's edit screen -- keeps
-  // "Total Nilai" consistent everywhere it's shown.
   const totalNilai = (r) => KRITERIA_PENILAIAN.reduce((sum, k) => sum + (Number(r[k.key]) || 0) * (k.bobot ?? 1), 0);
 
   function openDetail(row) {
@@ -78,10 +73,6 @@ export default function CandidateList() {
     setManualError("");
   }
 
-  // Adds a candidate that never went through an actual interview in this
-  // app -- for backfilling applicants that existed before the system did.
-  // No scoring, no koordinator/rekruter, no turnover assignment; just the
-  // bare candidate data plus a Hasil Interview so it shows up in this list.
   async function saveManual(e) {
     e.preventDefault();
     setSavingManual(true);

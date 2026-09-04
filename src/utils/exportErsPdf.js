@@ -2,24 +2,13 @@ import jsPDF from "jspdf";
 import logoDpi from "../assets/logo_dpi.png";
 import { loadImage, imageToDataUrl } from "./loadImage";
 
-// Generates a PDF that visually replicates PT. Dana Purna Investama's
-// official "ERS (Employee Requisition Sheet)" paper form -- logo level
-// with the title, form-number box, DIVISI/ISSUED DATE/NOMOR ERS, the
-// "DETIL ERS" grid, the PERSYARATAN JABATAN mini-table, the four-column
-// signature block, and the PETUNJUK instructions.
-// Layout reference: FM/HR/02.1, Revisi 0, Tgl. Terbit 21-05-2021.
-
-const PAGE_W = 595.28; // A4 pt
+const PAGE_W = 595.28; 
 const MARGIN_X = 40;
 const CONTENT_W = PAGE_W - MARGIN_X * 2;
 
 const INK = [20, 20, 20];
 const LABEL_INK = [40, 40, 40];
 const MUTED = [110, 110, 110];
-// The scanned form is essentially black-on-white -- the ONLY colour on the
-// whole page is the cyan "AREA PROJECT (ON SITE)" tag. Everything else
-// (including the DETIL ERS divider) stays plain white with black rules,
-// deliberately -- no grey fills anywhere else.
 const BADGE_FILL = [178, 235, 242];
 
 const MONTHS_ID = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
@@ -53,13 +42,8 @@ function formatTimestamp(str) {
 }
 
 function sanitizeFilePart(str) {
-  // Strip only characters that are actually illegal in filenames; keep
-  // spaces, dashes, dots and parentheses since the requested filename
-  // pattern relies on them.
   return String(str || "-").replace(/[\\/:*?"<>|]/g, "-");
 }
-
-// ---- low-level drawing helpers --------------------------------------------
 
 function box(doc, x, y, w, h, { fill } = {}) {
   doc.setDrawColor(0, 0, 0);
@@ -92,8 +76,6 @@ function getRequirementCellHeight(doc, value, valueW, minimumH) {
   return Math.max(minimumH, lineCount * lineH + 12);
 }
 
-// A "label | value" pair drawn as two bordered, vertically-centered, plain
-// white cells side by side -- the recurring building block of the form.
 function labelValueCell(doc, x, y, labelW, valueW, h, label, value, opts = {}) {
   const { labelSize = 7.5, valueSize = 8.5 } = opts;
 
@@ -161,10 +143,9 @@ export async function exportErsPdf(record) {
     logo = null;
   }
 
-  // ---------------- Header Row 1 ----------------
   const row1H = 46;
   const logoW = 110;
-  const rightW = 145; // Diperlebar agar No Form lebih leluasa
+  const rightW = 145; 
   const midW = CONTENT_W - logoW - rightW;
 
   box(doc, x0, y, logoW, row1H);
@@ -190,7 +171,6 @@ export async function exportErsPdf(record) {
 
   y += row1H;
 
-  // ---------------- Header Row 2-4 ----------------
   const subRowH = 20;
   const labelW2 = 110;
   const badgeW = rightW; 
@@ -207,13 +187,11 @@ export async function exportErsPdf(record) {
 
   y += subRowH * 3;
 
-  // ---------------- "DETIL ERS" section ----------------
   const sectionH = 20;
   box(doc, x0, y, CONTENT_W, sectionH); // Murni hitam-putih sesuai kode asli Anda
   putText(doc, "DETIL ERS", x0 + CONTENT_W / 2, y + 13.5, { align: "center", size: 9.5, bold: true });
   y += sectionH;
 
-  // Mengatur layout lebar kolom agar proporsional 1/4 bagian layar
   const colLabelW = CONTENT_W / 4;
   const colValueW = CONTENT_W / 4;
   const col2X = x0 + CONTENT_W / 2;
@@ -228,7 +206,6 @@ export async function exportErsPdf(record) {
   row2(24, "JABATAN", record.jabatan, "WILAYAH PENEMPATAN KERJA", record.wilayah_penempatan_kerja);
   row2(40, "NAMA KARYAWAN YANG DIGANTI / DIKURANGI", record.nama_karyawan_existing, "LOKASI PENEMPATAN KERJA", record.area_penempatan);
 
-  // ---------------- PERSYARATAN JABATAN ----------------
   const requirementHeaderH = 32;
   const requirementRowH = 32;
   const qualificationH = getRequirementCellHeight(doc, record.kualifikasi, colValueW, requirementRowH / 2);
@@ -239,32 +216,26 @@ export async function exportErsPdf(record) {
   const skillRowH = skillH + certificateH;
   const blockH = requirementHeaderH + qualificationRowH + skillRowH;
 
-  // Baris 1: Usia | Persyaratan Jabatan (Header)
   labelValueCell(doc, x0, y, colLabelW, colValueW, requirementHeaderH, "USIA", record.usia);
   box(doc, col2X, y, colLabelW + colValueW, requirementHeaderH);
   putText(doc, "PERSYARATAN JABATAN", col2X + (colLabelW + colValueW) / 2, y + 18, { align: "center", size: 9, bold: true });
 
-  // Baris 2: Status | Kualifikasi (Atas) & Bahasa (Bawah)
   labelValueCell(doc, x0, y + requirementHeaderH, colLabelW, colValueW, qualificationRowH, "STATUS", record.status_karyawan);
   labelValueCell(doc, col2X, y + requirementHeaderH, colLabelW, colValueW, qualificationH, "KUALIFIKASI", record.kualifikasi);
   labelValueCell(doc, col2X, y + requirementHeaderH + qualificationH, colLabelW, colValueW, languageH, "BAHASA", record.bahasa);
 
-  // Baris 3: Tanggal Aktif | Keahlian (Atas) & Sertifikat (Bawah)
   labelValueCell(doc, x0, y + requirementHeaderH + qualificationRowH, colLabelW, colValueW, skillRowH, "TANGGAL AKTIF YANG DIMINTA", formatDMY(record.tanggal_aktif_diminta));
   labelValueCell(doc, col2X, y + requirementHeaderH + qualificationRowH, colLabelW, colValueW, skillH, "KEAHLIAN", record.keahlian);
   labelValueCell(doc, col2X, y + requirementHeaderH + qualificationRowH + skillH, colLabelW, colValueW, certificateH, "SERTIFIKAT", record.sertifikat);
 
   y += blockH;
 
-  // ---------------- Signature block ----------------
-  // Lebar kolom diatur sama (CONTENT_W / 4) sehingga sejajar sempurna dengan tabel atasnya
   const sigColW = CONTENT_W / 4;
   const sigHeaderH = 18;
   const sigSpaceH = 44;
   const sigNameH = 16;
   const sigRoleH = 16;
 
-  // Mengambil 100% data persis dari kode yang Anda tempelkan
   const sigCols = [
     { title: "PEMOHON", role: "OPS / RO", name: record.pemohon_nama, ts: formatTimestamp(record.submitted_at) },
     { title: "DISETUJUI- 1", role: "DIVISION HEAD", name: record.disetujui_1 || "", ts: "" },
@@ -301,7 +272,6 @@ export async function exportErsPdf(record) {
 
   y = yRole + sigRoleH + 26;
 
-  // ---------------- PETUNJUK footer ----------------
   putText(doc, "PETUNJUK :", x0, y, { size: 8.5, bold: true });
   y += 14;
 

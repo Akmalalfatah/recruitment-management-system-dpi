@@ -51,9 +51,6 @@ function roleDashboard(role, data) {
 }
 
 const pending = (arr) => arr.filter((x) => x.status === "Pending").length;
-// Turnover no longer uses Pending/Accepted -- "belum selesai" is anything
-// short of the final "Terpilih" stage, and "Terpilih" itself is the
-// completed/hired outcome.
 const turnoverOpen = (arr) => arr.filter((t) => t.status !== "Terpilih").length;
 const turnoverDone = (arr) => arr.filter((t) => t.status === "Terpilih").length;
 

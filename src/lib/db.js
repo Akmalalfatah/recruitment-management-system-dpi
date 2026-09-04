@@ -1,14 +1,6 @@
 import { supabase, supabaseAuthAux, isSupabaseConfigured } from "./supabaseClient";
 import { mockAdapter } from "./mockAdapter";
 
-// -----------------------------------------------------------------------
-// db.js is the ONLY place the rest of the app talks to for data.
-// - If VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY are set -> real Supabase.
-// - Otherwise -> mockAdapter (localStorage demo data), so `npm run dev`
-//   works immediately with no backend setup.
-// See /supabase/schema.sql for the exact tables/columns this expects.
-// -----------------------------------------------------------------------
-
 export const usingDemoData = !isSupabaseConfigured;
 
 function range(from, to) {
@@ -63,9 +55,6 @@ export const ersApi = {
     if (error) throw error;
     return data;
   },
-  // Accepting an ERS auto-creates its Turnover (server-side trigger for
-  // Supabase, mirrored in mockAdapter for demo mode) -- nothing else to do
-  // here, the caller doesn't need to know that happened.
   async updateStatus(id, status) {
     if (!isSupabaseConfigured) return mockAdapter.updateErsStatus(id, status);
     const { data, error } = await supabase.from("ers_document").update({ status }).eq("id", id).select().single();
@@ -90,16 +79,12 @@ export const turnoverApi = {
     if (error) throw error;
     return data;
   },
-  // Generic update: used both for ER's simple status+note edit AND
-  // Recruitment's richer edit (process dates + keterangan_proses + status).
   async update(id, patch) {
     if (!isSupabaseConfigured) return mockAdapter.updateTurnover(id, patch);
     const { data, error } = await supabase.from("turnover").update(patch).eq("id", id).select().single();
     if (error) throw error;
     return data;
   },
-  // Kept as a thin alias over update() so ER's existing call site doesn't
-  // need to change: updateStatus(id, status, extra) === update(id, {status, ...extra}).
   async updateStatus(id, status, extra = {}) {
     return this.update(id, { status, ...extra });
   },
@@ -115,9 +100,6 @@ export const interviewApi = {
     if (error) throw error;
     return data;
   },
-  // "Data Peserta Wawancara": whether a candidate shows up here is derived
-  // automatically from hasil_interview -- Recommended/Considered are kept,
-  // Not Recommended stays only in Interview Harian. No manual choice.
   async listHold({ dateFrom, dateTo } = {}) {
     if (!isSupabaseConfigured) return mockAdapter.listHoldInterviews(range(dateFrom, dateTo));
     let q = supabase
@@ -131,10 +113,6 @@ export const interviewApi = {
     if (error) throw error;
     return data;
   },
-  // Candidates not yet assigned to any turnover -- the pool Recruitment
-  // picks from when "memilih peserta yang diajukan" for a turnover. A
-  // Hired candidate always keeps turnover_id set to their winning
-  // turnover, so they naturally never appear here.
   async listAvailablePool() {
     if (!isSupabaseConfigured) return mockAdapter.listAvailablePool();
     const { data, error } = await supabase
@@ -146,8 +124,6 @@ export const interviewApi = {
     if (error) throw error;
     return data;
   },
-  // "Riwayat pengajuan": every turnover this candidate has ever been
-  // proposed to, most recent first.
   async history(interviewId) {
     if (!isSupabaseConfigured) return mockAdapter.listInterviewHistory(interviewId);
     const { data, error } = await supabase
@@ -170,21 +146,14 @@ export const interviewApi = {
     if (error) throw error;
     return data;
   },
-  // "Dibuang" -- there is no DB status for this, the row is removed outright.
   async remove(id) {
     if (!isSupabaseConfigured) return mockAdapter.deleteInterview(id);
     const { error } = await supabase.from("interview_harian").delete().eq("id", id);
     if (error) throw error;
   },
-  // Assign (or unassign, pass null) this candidate to a turnover -- the
-  // "diajukan" action on the Turnover edit screen.
   async assignToTurnover(id, turnoverId) {
     return this.update(id, { turnover_id: turnoverId });
   },
-  // "Peserta yang Tidak Terpilih" on the Turnover edit screen: every
-  // candidate ever proposed to THIS turnover and later released
-  // (unassigned_at set) -- i.e. everyone who was considered but didn't end
-  // up being the hire, not just the ones currently attached.
   async turnoverHistory(turnoverId) {
     if (!isSupabaseConfigured) return mockAdapter.listTurnoverCandidateHistory(turnoverId);
     const { data, error } = await supabase
@@ -255,10 +224,6 @@ export const notificationsApi = {
     const { error } = await supabase.rpc("mark_all_notifications_read");
     if (error) throw error;
   },
-  // Live updates: fires `onInsert` the instant a new notification row is
-  // created anywhere (any user, any role) — this is what makes the bell
-  // badge update without a page refresh. No-op in demo mode (no realtime
-  // backend to subscribe to).
   subscribe(onInsert) {
     if (!isSupabaseConfigured) return () => {};
     const channel = supabase
@@ -271,11 +236,6 @@ export const notificationsApi = {
   },
 };
 
-// -----------------------------------------------------------------------
-// Super Admin only: CRUD user accounts (login + profile in one). RLS on
-// `users` only allows Super_Admin to insert/update/delete other users'
-// rows -- see the SQL patch that adds those policies.
-// -----------------------------------------------------------------------
 export const userApi = {
   async list() {
     if (!isSupabaseConfigured) return mockAdapter.listUsers();
@@ -283,10 +243,6 @@ export const userApi = {
     if (error) throw error;
     return data;
   },
-  // Creates both the Supabase Auth login AND the `users` profile row.
-  // Uses `supabaseAuthAux` (a separate, non-persisted client) for the
-  // signUp step specifically so it never replaces the Super Admin's own
-  // active session in this browser tab.
   async create({ name, email, password, role, area_penempatan }) {
     if (!isSupabaseConfigured) return mockAdapter.createUser({ name, email, password, role, area_penempatan });
     const { data: signUpData, error: signUpError } = await supabaseAuthAux.auth.signUp({ email, password });
@@ -306,12 +262,6 @@ export const userApi = {
     if (error) throw error;
     return data;
   },
-  // Removes the profile row only (locks the account out of the app --
-  // ProtectedRoute requires a matching `users` row to resolve a role).
-  // The underlying Supabase Auth login itself can only be fully deleted
-  // from the Supabase Dashboard (Authentication -> Users) or via the
-  // admin API with a service-role key, which this client-only app
-  // intentionally never holds.
   async remove(id) {
     if (!isSupabaseConfigured) return mockAdapter.removeUser(id);
     const { error } = await supabase.from("users").delete().eq("id", id);

@@ -58,7 +58,6 @@ export function GhostButton({ children, className = "", ...props }) {
   );
 }
 
-// Solid, square action buttons used inside table "Aksi" columns.
 const ACTION_VARIANTS = {
   info: "bg-status-blue hover:bg-blue-600",
   edit: "bg-secondary hover:bg-secondary-600",

@@ -11,9 +11,6 @@ import { exportToExcel } from "../../utils/exportExcel";
 import { exportErsPdf } from "../../utils/exportErsPdf";
 import { ERS_STATUS } from "../../lib/constants";
 
-// Recruitment's ERS review screen: this is the ONLY place an ERS can be
-// Accepted/Rejected. OPS submits the ERS but can't accept its own
-// submission (see /ops/ers, which is read-only for status).
 export default function RecruitmentErsList() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -27,8 +24,6 @@ export default function RecruitmentErsList() {
     setLoading(true);
     ersApi
       .list({ dateFrom: range.from, dateTo: range.to })
-      // Once accepted, an ERS has already done its job (its turnover was
-      // auto-created) -- Recruitment doesn't need to keep seeing it here.
       .then((all) => setRows(all.filter((r) => r.status !== "Accepted")))
       .finally(() => setLoading(false));
   }, [range]);

@@ -11,9 +11,6 @@ import Modal from "../../components/common/Modal";
 import { exportToExcel } from "../../utils/exportExcel";
 import { exportErsPdf } from "../../utils/exportErsPdf";
 
-// OPS can submit and track their own ERS here, but can NOT accept/reject
-// it themselves — that decision belongs to Recruitment only
-// (see /recruitment/ers). This screen is read-only for status.
 export default function ErsList() {
   const navigate = useNavigate();
   const [rows, setRows] = useState([]);

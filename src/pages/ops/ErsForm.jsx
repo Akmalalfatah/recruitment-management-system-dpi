@@ -6,17 +6,13 @@ import { Field, TextInput, SelectInput, PrimaryButton, Card } from "../../compon
 import { JABATAN_LIST, ALASAN_ERS_LIST, OPS_DIVISI, ERS_DISETUJUI_1_DEFAULT, ERS_DITERIMA_DEFAULT } from "../../lib/constants";
 import { useAuth } from "../../contexts/AuthContext";
 
-// Hanya field-field "Detil ERS" yang benar-benar diisi OPS di sini. Divisi,
-// Nomor ERS, dan Tanggal Pengajuan (Issued Date) TIDAK diinput manual --
-// diambil otomatis dari akun OPS yang login & waktu submit (lihat
-// mockAdapter.createErs / trigger ers_document_set_nomor di schema.sql).
 const emptyForm = {
   alasan_ers: "",
   jenis_kontrak_project: "",
   jabatan: "",
   wilayah_penempatan_kerja: "",
   nama_karyawan_existing: "",
-  area_penempatan: "", // = "Lokasi Penempatan Kerja" pada form cetak
+  area_penempatan: "", 
   usia: "",
   status_karyawan: "",
   tanggal_aktif_diminta: "",
@@ -24,8 +20,6 @@ const emptyForm = {
   bahasa: "",
   keahlian: "",
   sertifikat: "",
-  // Nama-nama pada blok tanda tangan: terisi otomatis begitu form dibuka,
-  // tapi tetap bisa diketik ulang/diganti oleh OPS sebelum disimpan.
   pemohon_nama: "",
   disetujui_1: ERS_DISETUJUI_1_DEFAULT,
   disetujui_2: "",
