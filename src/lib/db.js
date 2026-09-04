@@ -247,7 +247,7 @@ export const userApi = {
     if (!isSupabaseConfigured) return mockAdapter.createUser({ name, email, password, role, area_penempatan });
     const { data: signUpData, error: signUpError } = await supabaseAuthAux.auth.signUp({ email, password });
     if (signUpError) throw signUpError;
-    if (!signUpData.user) throw new Error("Gagal membuat akun -- coba lagi.");
+    if (!signUpData.user) throw new Error("Gagal membuat akun");
     const { data: profile, error: perr } = await supabase
       .from("users")
       .insert({ id: signUpData.user.id, name, email, role, area_penempatan: area_penempatan || null })

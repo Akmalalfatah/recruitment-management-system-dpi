@@ -1,195 +1,3 @@
--- =========================================================================
--- DPI Recruitment & Turnover System - Supabase schema
--- Run this whole file once in Supabase SQL editor on a fresh project.
--- Simple, free-tier friendly: Supabase Auth (email/password) + RLS by role.
---
--- Revised version — fixes vs. the original draft (validated against a real
--- Postgres instance running the exact insert/select calls src/lib/db.js
--- sends):
---   1. `interview_result` enum was missing 'Considered' (the form offers
---      Recommended / Considered / Not Recommended -> every "Considered"
---      submission would fail).
---   2. `interview_harian` was missing the `hire_status` column that
---      Recruitment's "Tandai Hired / Not Hired" action writes to.
---   3. `nomor_ers` / `nomor_turnover` were NOT NULL with no default, but
---      the actual OPS forms never send them (only the localStorage demo
---      adapter auto-generated them) -> every real insert would fail with
---      a not-null violation. Added auto-numbering triggers.
---   4. `id_card_process` insert only ever receives `recruitment_id` +
---      `status` from the app (Recruitment's "Tandai Hired" action) -> the
---      display fields (nama_karyawan, jabatan, tanggal_mulai) were only
---      ever filled in by the demo adapter, never for real Supabase. Added
---      a trigger that copies them from the linked interview automatically.
---   5. RLS on `interview_harian` SELECT only allowed Recruitment, but the
---      shared turnover list component also reads it for Employee Relation
---      and Payroll (to show the "Karyawan Baru" column) -> added read
---      access for those two roles.
---   6. RLS on `id_card_process` INSERT only allowed Training, but it's
---      Recruitment who creates the row (via "Tandai Hired") -> added
---      insert access for Recruitment.
---   7. auth_role()/auth_area() helper functions made SECURITY DEFINER
---      (Supabase's recommended pattern for RLS helper functions) so they
---      read `users` without depending on RLS on that same table.
---
--- v3 changes (area handling):
---   - Removed the `areas` master table + dropdown. "Area Penempatan" is now
---     free text the user types directly on each ERS/Turnover form, matching
---     the actual UI (it was wrongly modeled as a lookup table before).
---   - Removed `wilayah_penempatan` entirely — the app only needs one area
---     field, not two.
---   - `users.area_id`, `ers_document.area_id`, `turnover.area_id` (uuid FK)
---     all became a single `area_penempatan varchar(255)` column.
---   - RLS that used to compare `area_id = auth_area()` (exact uuid match)
---     now compares free-typed text case-insensitively/trimmed, since two
---     people typing "KCP Sudirman" and "kcp sudirman " should still count
---     as the same place. This is inherently a little less strict than a
---     uuid FK match — worth knowing if you'd rather scope OPS visibility
---     by `created_by = auth.uid()` instead; ask if you want that swapped.
---
--- v4 change:
---   - Added `turnover.nama_karyawan_baru` + a trigger that keeps it synced
---     whenever Recruitment marks an interview Hired/Not Hired/'-'. Before
---     this, "Karyawan Baru" was only ever guessed client-side by checking
---     hasil_interview = 'Recommended' (not the actual hire decision) and
---     was never persisted, so it wasn't reliably visible to ER/Payroll.
---
--- v5 change:
---   - Removed `turnover.nama_ctkad`. It was an OPS-fillable text field on
---     the creation form that ended up being confused with "who's the new
---     employee" — but at request time there's no candidate yet, and one
---     turnover can have many candidates (many interview_harian rows) with
---     only one ever actually hired. `nama_karyawan_baru` (v4, trigger-set
---     only when an interview is marked Hired) is the single correct place
---     for that now — nothing OPS types at creation feeds it.
---
--- v6 change:
---   - Removed area-text RLS matching entirely (auth_area() is gone). OPS
---     scoping now checks `uploaded_by`/`created_by = auth.uid()` instead.
---     Found via testing: if OPS creates an ERS/Turnover for an area whose
---     text doesn't exactly match their own profile's area_penempatan (an
---     easy thing to do now that area is free-typed), the old text-match
---     policy blocked the INSERT's own RETURNING clause — OPS couldn't even
---     read back the row they'd just created. Matching on creator instead
---     sidesteps that completely and needs no text comparison at all.
---
--- v7 change (real Supabase, nothing static):
---   - Added `id_card_process.photo_data_url` (text). The Training ID Card
---     screen (src/pages/training/IdCardList.jsx) reads the uploaded photo
---     client-side as a base64 data: URL and sends it straight to
---     idCardApi.update() — this column was missing entirely, so every real
---     photo upload against Supabase would have failed with an "unknown
---     column" error even though it worked fine against the localStorage
---     demo adapter.
---   - Added `notifications` + `notification_reads` tables, five triggers
---     (ERS created, turnover accepted/rejected, interview scheduled,
---     candidate hired, ID card completed) that auto-populate the feed on
---     real data changes, a `my_notifications` view (adds a per-user
---     `is_read` flag), and a `mark_all_notifications_read()` RPC. This
---     replaces the hardcoded `initialNotifications` array that used to
---     live in src/components/layout/Header.jsx.
---   - Enabled Postgres Realtime on `notifications` so the bell badge
---     updates live for everyone the moment something happens, without a
---     page refresh.
---
--- v8 fix (RLS 42501 on every trigger-driven insert, not just ERS):
---   Every "auto" write done by a trigger — the 5 notify_* functions, the
---   ERS/Turnover auto-numbering, and the id_card_process autofill — was
---   missing SECURITY DEFINER. A PL/pgSQL function defaults to SECURITY
---   INVOKER, meaning it runs with the CALLING user's own RLS visibility,
---   not the table owner's. Concretely this broke two different ways:
---     1. `notifications` has no INSERT policy for `authenticated` at all,
---        so any trigger that tried to insert a notification row failed
---        outright with 42501 — this hit ERS create, Turnover accept/
---        reject, Interview create, candidate Hired, and ID Card Completed
---        equally; ERS was just the first one anyone happened to trigger.
---     2. The ERS/Turnover numbering triggers do `select count(*) ...` on
---        their own table to compute the next sequence number, but OPS's
---        SELECT policy on both tables only shows rows THEY created — so
---        the count was silently scoped to just their own past submissions
---        instead of every OPS user's, which would eventually produce a
---        duplicate `nomor_ers`/`nomor_turnover` and fail on the UNIQUE
---        constraint instead of RLS. Same root cause, different symptom.
---   Fix: every trigger/helper function that reads or writes a table beyond
---   the single row it's already authorized to touch is now explicitly
---   `security definer set search_path = public`, matching the pattern
---   `turnover_sync_karyawan_baru`/`auth_role` already used correctly.
---
--- v9 change (business-rule fixes requested for the Recruitment/OPS flow):
---   1. Interview harian: a turnover can still have many interview_harian
---      rows (many candidates), but the moment ONE is marked "Hired" the
---      rest of that turnover's candidates now auto-flip to "Not Hired"
---      (trigger `interview_harian_auto_not_hire_siblings`), and a turnover
---      that already has a hired candidate (`nama_karyawan_baru` set) can no
---      longer receive new interview_harian rows at all (trigger
---      `interview_check_turnover_open`, enforced on INSERT) — the
---      replacement search for that turnover is done.
---   2. New tables `interview_candidates` + `interview_candidate_history`:
---      a reusable candidate pool ("Data Peserta Wawancara"). Whenever an
---      interview_harian row's hire_status becomes "Not Hired" (whether the
---      user set it directly or it was auto-set by #1 above), the
---      candidate's personal data + latest scores/result are upserted into
---      `interview_candidates` (matched by no_hp, falling back to
---      name+birthdate) and a row is appended to
---      `interview_candidate_history` recording which turnover/position
---      they were evaluated for and the outcome — so the same person can be
---      reconsidered for a future, similar-job turnover instead of the data
---      just sitting unused inside a rejected interview row. Trigger:
---      `interview_harian_sync_candidate_pool`.
---   3. Turnover: OPS can no longer create a turnover without picking an
---      Accepted ERS document — trigger `turnover_check_ers_accepted`
---      raises on INSERT if `ers_document_id` is null or the referenced ERS
---      isn't `Accepted` yet. That same trigger also blocks reusing an ERS
---      that's already "used up" — one whose own turnover has already
---      reached `Accepted` — so one ERS can't be recycled into more than
---      one accepted turnover request.
---   4. ERS: OPS can no longer accept/reject their own ERS. `ers_update`
---      RLS now only allows `HR_Recruitment` and `Super_Admin` to change an
---      ERS's status; OPS keeps read/insert only.
---   5. ERS document gains three signature-block columns:
---      `disetujui_1_nama` (defaults to "R. STEVE TIYANTOKO"),
---      `disetujui_2_nama` (no default, typed by OPS),
---      `diterima_nama` (defaults to "AGARISMAN KRISTOAJI") — together with
---      `pemohon_nama`, all four are editable text fields on the ERS form,
---      just pre-filled with sensible defaults so OPS rarely has to retype
---      them. These feed the "PEMOHON / DISETUJUI-1 / DISETUJUI-2 /
---      DITERIMA" signature columns on the printed ERS PDF, which used to
---      always render blank except Pemohon.
---
--- v10 changes (this update — fixes gaps found while wiring up new features):
---   1. `turnover.status` was still typed `doc_status` ('Pending'/'Accepted'/
---      'Rejected'), but the frontend has moved to a 7-stage pipeline
---      ("Belum Kirim" ... "Terpilih", see TURNOVER_STATUS_LIST in
---      src/lib/constants.js) — every real save of a turnover's status
---      would have failed with an invalid-enum-value error. New dedicated
---      `turnover_status` enum, `turnover.status` now uses it, default
---      'Belum Kirim'.
---   2. There was no trigger that actually creates a turnover when an ERS
---      is Accepted, even though the whole app (OPS's read-only turnover
---      screen, Recruitment's ERS screen) assumes this already happens —
---      added `ers_document_create_turnover()`.
---   3. `interviewApi.history()` / the new `turnoverHistory()` (see below)
---      read a table called `interview_turnover_log` that never existed in
---      this schema (only in the localStorage demo adapter) — added it,
---      plus a trigger (`interview_log_turnover_assignment`) that keeps it
---      in sync every time a candidate is proposed to / released from a
---      turnover, mirroring the demo adapter exactly.
---   4. `turnover_sync_karyawan_baru()` only ever synced
---      `nama_karyawan_baru`, never actually moved `status` to "Terpilih"
---      on hire (or back to "Interview User" if the hire is undone) even
---      though the UI text next to the status dropdown claims it does.
---   5. `turnover_check_ers_accepted()`'s "already used" duplicate check
---      compared `status = 'Accepted'`, a value that can't exist under the
---      new pipeline — simplified to "any turnover already exists for this
---      ERS", matching the new 1-ERS-to-1-turnover trigger's own guard.
---   6. `notify_turnover_status()` fired on status 'Accepted'/'Rejected',
---      also no longer reachable values — now fires once, when a turnover
---      reaches 'Terpilih'.
---
--- This whole file is safe to re-run on a project that already has an
--- earlier version of this schema — it drops its own objects first.
--- =========================================================================
-
--- ---------- Reset (safe to re-run) ----------
 drop view if exists my_notifications cascade;
 drop table if exists notification_reads cascade;
 drop table if exists notifications cascade;
@@ -235,15 +43,11 @@ drop policy if exists "Authenticated upload ers-documents" on storage.objects;
 drop policy if exists "Authenticated read idcard-photos" on storage.objects;
 drop policy if exists "Authenticated upload idcard-photos" on storage.objects;
 
--- ---------- Enums ----------
 create type user_role as enum (
   'Super_Admin', 'OPS', 'HR_ER', 'HR_Recruitment', 'HR_Training', 'HR_Payroll'
 );
 create type user_status as enum ('Active', 'Inactive');
 create type doc_status as enum ('Pending', 'Accepted', 'Rejected');
--- Turnover's own 7-stage pipeline (mirrors TURNOVER_STATUS_LIST in
--- src/lib/constants.js exactly) -- separate from doc_status because ERS
--- only ever needs Pending/Accepted/Rejected.
 create type turnover_status as enum (
   'Belum Kirim', 'Sudah Kirim', 'Pengurangan', 'Interview User',
   'Terpilih', 'Menunggu Info User', 'Dihold Sementara'
@@ -251,8 +55,6 @@ create type turnover_status as enum (
 create type idcard_status as enum ('Pending', 'In Progress', 'Completed');
 create type interview_result as enum ('Recommended', 'Considered', 'Not Recommended');
 create type hire_status_type as enum ('-', 'Hired', 'Not Hired');
-
--- ---------- Users (profile row, 1:1 with auth.users) ----------
 create table users (
   id uuid primary key references auth.users (id) on delete cascade,
   area_penempatan varchar(255),
@@ -264,19 +66,18 @@ create table users (
   updated_at timestamptz default now()
 );
 
--- ---------- ERS documents ----------
 create table ers_document (
   id uuid primary key default gen_random_uuid(),
-  nomor_ers varchar(50) unique, -- auto-filled by trigger below if not supplied, pattern {seq}/{divisi}/ERS/{year}
-  divisi varchar(255), -- selalu "OPR BCA.1": hanya divisi OPR yang berwenang membuat ERS (lihat OPS_DIVISI di src/lib/constants.js), bukan input bebas dari form
+  nomor_ers varchar(50) unique, 
+  divisi varchar(255),
   uploaded_by uuid references users (id),
-  pemohon_nama varchar(255), -- snapshot of the requester's name at submission time, for the printed "Pemohon" signature column
-  area_penempatan varchar(255), -- "Lokasi Penempatan Kerja" on the printed ERS
-  wilayah_penempatan_kerja varchar(100), -- e.g. "KANWIL 11"
+  pemohon_nama varchar(255), 
+  area_penempatan varchar(255), 
+  wilayah_penempatan_kerja varchar(100), 
   nama_karyawan_existing varchar(255),
   jabatan varchar(100),
   status_karyawan varchar(50),
-  usia varchar(50), -- free text, e.g. "MAX. 25 TAHUN" (matches the paper form; not a bare number)
+  usia varchar(50), 
   tanggal_aktif_diminta date,
   alasan_ers varchar(100),
   jenis_kontrak_project varchar(255),
@@ -284,20 +85,19 @@ create table ers_document (
   keahlian varchar(255),
   bahasa varchar(255),
   sertifikat varchar(255),
-  file_name varchar(255), -- optional: kept for future use (e.g. re-uploading a signed scan), not required at creation
-  file_path varchar(255), -- storage object path, private bucket (see below)
-  disetujui_1_nama varchar(255) default 'R. STEVE TIYANTOKO', -- "DISETUJUI-1 / DIVISION HEAD" signature name, auto-filled
-  disetujui_2_nama varchar(255), -- "DISETUJUI-2 / DIRECTOR" signature name, typed by OPS on the form (no fixed default)
-  diterima_nama varchar(255) default 'AGARISMAN KRISTOAJI', -- "DITERIMA / HR DIVISION HEAD" signature name, auto-filled
+  file_name varchar(255), 
+  file_path varchar(255), 
+  disetujui_1_nama varchar(255) default 'R. STEVE TIYANTOKO', 
+  disetujui_2_nama varchar(255), 
+  diterima_nama varchar(255) default 'AGARISMAN KRISTOAJI', 
   status doc_status not null default 'Pending',
-  created_at timestamptz default now(), -- Issued Date, filled automatically at submit time
-  submitted_at timestamptz default now() -- exact submission timestamp shown under "Pemohon" on the printed PDF
+  created_at timestamptz default now(), 
+  submitted_at timestamptz default now() 
 );
 
--- ---------- Turnover requests ----------
 create table turnover (
   id uuid primary key default gen_random_uuid(),
-  nomor_turnover varchar(50) unique, -- auto-filled by trigger below if not supplied
+  nomor_turnover varchar(50) unique, 
   area_penempatan varchar(255),
   created_by uuid references users (id),
   ers_document_id uuid references ers_document (id),
@@ -310,17 +110,16 @@ create table turnover (
   tanggal_keluar date,
   tgl_kirim_kandidat date,
   tgl_interview_user date,
-  tgl_pkwt date,               -- simple extra field per PKWT requirement
+  tgl_pkwt date,              
   tgl_aktif_kerja date,
   nama_user varchar(255),
   keterangan_proses text,
-  nama_karyawan_baru varchar(255), -- auto-synced by trigger below when a linked interview is marked Hired
+  nama_karyawan_baru varchar(255), 
   status turnover_status not null default 'Belum Kirim',
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
 
--- ---------- Interview harian ----------
 create table interview_harian (
   id uuid primary key default gen_random_uuid(),
   turnover_id uuid references turnover (id),
@@ -351,29 +150,21 @@ create table interview_harian (
   created_at timestamptz default now()
 );
 
--- ---------- ID card process ----------
 create table id_card_process (
   id uuid primary key default gen_random_uuid(),
   recruitment_id uuid references interview_harian (id),
   nama_karyawan varchar(255),
   jabatan varchar(100),
-  nomor_karyawan varchar(50), -- auto-filled by trigger below, pattern {year}{seq 4 digits}
+  nomor_karyawan varchar(50), 
   tanggal_mulai date,
   file_name varchar(255),
-  file_path varchar(255), -- storage object path for the uploaded employee photo (private bucket) — optional/legacy
-  photo_data_url text, -- the actual photo the app uploads today: a base64 data: URL, read client-side via FileReader and drawn straight onto the ID card canvas (see src/utils/exportIdCard.js). No storage bucket round-trip needed.
+  file_path varchar(255), 
+  photo_data_url text, 
   status idcard_status not null default 'Pending',
   catatan text,
   created_at timestamptz default now()
 );
 
--- ---------- Interview candidate pool ("Data Peserta Wawancara") ----------
--- Reusable talent pool: whenever a candidate is marked "Not Hired" (either
--- directly, or auto-set because someone else got hired for the same
--- turnover), their personal data + latest scores/result are kept here,
--- detached from any specific turnover, so they can be considered again for
--- a future turnover with a similar job. `interview_candidate_history`
--- records every turnover/position they were actually evaluated for.
 create table interview_candidates (
   id uuid primary key default gen_random_uuid(),
   nama_kandidat varchar(255) not null,
@@ -409,15 +200,6 @@ create table interview_candidate_history (
   created_at timestamptz default now()
 );
 
--- "Riwayat pengajuan turnover" per candidate/per turnover: one row per
--- span of time a candidate was assigned (`turnover_id`) to a given
--- turnover. `unassigned_at` + `outcome` are null while the assignment is
--- still active; set once the candidate is released (manually "Lepas", or
--- auto-released because a sibling got Hired instead) -- `outcome` records
--- their hire_status at that moment. Powers both:
---   - CandidateList's per-candidate "Riwayat Pengajuan Turnover"
---   - Recruitment's per-turnover "Peserta yang Tidak Terpilih" (candidates
---     once proposed to THIS turnover but released without being hired)
 create table interview_turnover_log (
   id uuid primary key default gen_random_uuid(),
   interview_harian_id uuid not null references interview_harian (id) on delete cascade,
@@ -427,13 +209,9 @@ create table interview_turnover_log (
   outcome hire_status_type
 );
 
--- ---------- Notifications (activity feed, shared across all roles) ----------
--- One shared feed everyone can read; per-user "read" state is tracked
--- separately in notification_reads so one person reading a notification
--- doesn't mark it read for everyone else.
 create table notifications (
   id uuid primary key default gen_random_uuid(),
-  type varchar(30) not null, -- 'ers' | 'turnover' | 'interview' | 'idcard'
+  type varchar(30) not null, 
   title varchar(255) not null,
   message text,
   related_id uuid,
@@ -447,13 +225,6 @@ create table notification_reads (
   primary key (notification_id, user_id)
 );
 
--- =========================================================================
--- Auto-numbering: nomor_ers ("ERS/2026/001") and nomor_turnover
--- ("TO/2026/001"). The app's forms never send these — only the localStorage
--- demo adapter fakes them client-side — so real inserts need the database
--- to generate them. pg_advisory_xact_lock serializes concurrent inserts so
--- two users submitting at the same instant don't collide on the same number.
--- =========================================================================
 create or replace function next_doc_number(prefix text, tbl regclass, col text) returns varchar
 language plpgsql security definer set search_path = public as $$
 declare
@@ -469,8 +240,6 @@ begin
 end;
 $$;
 
--- ERS numbering follows the paper form's own pattern: {seq}/{Divisi}/ERS/{year},
--- e.g. "03614/OPR BCA.1/ERS/2026" -- sequence restarts per divisi, not global.
 create or replace function ers_document_set_nomor() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare
@@ -505,16 +274,6 @@ create trigger trg_turnover_set_nomor
   before insert on turnover
   for each row execute function turnover_set_nomor();
 
--- =========================================================================
--- A turnover can only be created against an Accepted ERS document — OPS
--- needs a real, already-approved ERS to point to, and only Recruitment can
--- accept an ERS (see RLS below), so this closes the loop server-side too
--- (not just hiding non-Accepted ERS from the dropdown client-side).
--- It also can't be an ERS that's already "used up" — one whose own
--- turnover has already reached Accepted status (ER approved the
--- replacement process for it) — otherwise the same ERS could be recycled
--- into multiple parallel turnover requests.
--- =========================================================================
 create or replace function turnover_check_ers_accepted() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare
@@ -531,8 +290,6 @@ begin
   if ers_status is distinct from 'Accepted' then
     raise exception 'Dokumen ERS yang dipilih belum Accepted, turnover tidak bisa dibuat.';
   end if;
-  -- One ERS -> at most one turnover, full stop (regardless of what stage
-  -- of the 7-stage pipeline that turnover is currently at).
   select nomor_turnover into already_used_turnover
     from turnover where ers_document_id = new.ers_document_id limit 1;
   if already_used_turnover is not null then
@@ -545,15 +302,6 @@ create trigger trg_turnover_check_ers_accepted
   before insert on turnover
   for each row execute function turnover_check_ers_accepted();
 
--- =========================================================================
--- The instant Recruitment Accepts an ERS, its turnover request exists
--- automatically — OPS/Recruitment never insert a turnover row by hand
--- (there's no form for it in the UI). SECURITY DEFINER since accepting an
--- ERS is an ers_document UPDATE by HR_Recruitment, who has no INSERT
--- grant on turnover otherwise (turnover_insert only allows OPS/Super_Admin
--- — left as-is for defence in depth, this trigger bypasses it on purpose).
--- Idempotent: does nothing if a turnover already exists for this ERS.
--- =========================================================================
 create or replace function ers_document_create_turnover() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
@@ -573,10 +321,6 @@ create trigger trg_ers_document_create_turnover
   after update on ers_document
   for each row execute function ers_document_create_turnover();
 
--- =========================================================================
--- Auto-fill id_card_process from the linked interview when Recruitment
--- marks a candidate Hired (the app only sends recruitment_id + status).
--- =========================================================================
 create or replace function id_card_process_autofill() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare
@@ -606,16 +350,6 @@ create trigger trg_id_card_process_autofill
   before insert on id_card_process
   for each row execute function id_card_process_autofill();
 
--- =========================================================================
--- Keep turnover.nama_karyawan_baru in sync with hiring decisions. When
--- Recruitment marks a candidate "Hired" in Interview Harian, the linked
--- Turnover request should immediately show who the new employee is; if a
--- hire decision is later corrected away from "Hired", clear it back out.
--- SECURITY DEFINER because Recruitment can update interview_harian but is
--- intentionally NOT allowed to update turnover directly (that's OPS/ER's
--- job) — this trigger is a narrow, automatic exception scoped to just this
--- one field, not a broader permission grant.
--- =========================================================================
 create or replace function turnover_sync_karyawan_baru() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
@@ -634,11 +368,6 @@ create trigger trg_turnover_sync_karyawan_baru
   after update on interview_harian
   for each row execute function turnover_sync_karyawan_baru();
 
--- =========================================================================
--- A turnover exists to find ONE replacement. Once a candidate has been
--- marked Hired for it (turnover.nama_karyawan_baru is set), the search is
--- over — block new interview_harian rows against that turnover_id.
--- =========================================================================
 create or replace function interview_check_turnover_open() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare
@@ -657,14 +386,6 @@ create trigger trg_interview_check_turnover_open
   before insert on interview_harian
   for each row execute function interview_check_turnover_open();
 
--- =========================================================================
--- The moment one candidate is marked Hired for a turnover, every OTHER
--- candidate interviewed for that same turnover is no longer needed —
--- auto-flip their hire_status to "Not Hired" so Recruitment doesn't have
--- to close them out by hand one by one. Runs AFTER trg_turnover_sync_
--- karyawan_baru (alphabetically later trigger name on the same event),
--- which is fine since that trigger only touches the `turnover` table.
--- =========================================================================
 create or replace function interview_harian_auto_not_hire_siblings() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
@@ -682,15 +403,6 @@ create trigger trg_interview_harian_auto_not_hire_siblings
   after update on interview_harian
   for each row execute function interview_harian_auto_not_hire_siblings();
 
--- =========================================================================
--- Interview candidate pool sync: whenever a candidate's hire_status becomes
--- "Not Hired" — set directly by Recruitment, or auto-set by the trigger
--- above — save their data into the reusable `interview_candidates` pool
--- (matched by no_hp when present, else by name+birthdate, else always a
--- new pool row) instead of letting it go to waste inside one rejected
--- interview_harian row, and log this turnover/outcome into
--- `interview_candidate_history`.
--- =========================================================================
 create or replace function interview_harian_sync_candidate_pool() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare
@@ -760,17 +472,6 @@ create trigger trg_interview_harian_sync_candidate_pool
   after update on interview_harian
   for each row execute function interview_harian_sync_candidate_pool();
 
--- =========================================================================
--- "Riwayat pengajuan turnover" log (interview_turnover_log): every time a
--- candidate's turnover_id actually changes, close out the previous open
--- assignment span (if any) with unassigned_at/outcome, and open a new one
--- for the new assignment (if any). Fires AFTER
--- trg_interview_harian_auto_not_hire_siblings alphabetically, so for
--- siblings auto-released when someone else gets Hired, NEW.hire_status is
--- already 'Not Hired' by the time this runs -- outcome captures that
--- correctly, same as a manual "Lepas" captures whatever hire_status was
--- at that moment (usually still '-').
--- =========================================================================
 create or replace function interview_log_turnover_assignment() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
@@ -792,7 +493,6 @@ create trigger trg_interview_log_turnover_assignment
   when (new.turnover_id is distinct from old.turnover_id)
   execute function interview_log_turnover_assignment();
 
--- keep updated_at current on turnover/users edits
 create or replace function set_updated_at() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
@@ -805,19 +505,6 @@ create trigger trg_turnover_updated_at before update on turnover
 create trigger trg_users_updated_at before update on users
   for each row execute function set_updated_at();
 
--- =========================================================================
--- Notifications: auto-created by database triggers whenever something
--- happens that other modules care about, so the Header bell is fed by real
--- activity instead of a hardcoded array. `notifications` has no INSERT
--- policy for `authenticated` at all (see RLS section below — the only
--- policy on it is SELECT) — every function below is explicitly marked
--- SECURITY DEFINER so it runs as the function owner and bypasses RLS on
--- the way in. Ownership alone does NOT do this in Postgres; without the
--- SECURITY DEFINER keyword a PL/pgSQL function always runs as the calling
--- user (SECURITY INVOKER is the default), which is what caused every one
--- of these to fail with "new row violates row-level security policy for
--- table notifications" (42501) before this was added.
--- =========================================================================
 create or replace function create_notification(p_type varchar, p_title varchar, p_message text, p_related_id uuid)
 returns void language plpgsql security definer set search_path = public as $$
 begin
@@ -904,8 +591,6 @@ $$;
 create trigger trg_notify_idcard_completed after update on id_card_process
   for each row execute function notify_idcard_completed();
 
--- One-shot RPC the Header calls to mark every currently-unread notification
--- as read for the logged-in user in a single round trip.
 create or replace function mark_all_notifications_read() returns void
 language plpgsql security definer set search_path = public as $$
 begin
@@ -914,12 +599,6 @@ begin
   on conflict (notification_id, user_id) do nothing;
 end;
 $$;
-
--- =========================================================================
--- Row Level Security - simple, free-tier friendly.
--- Rule of thumb: everyone can read their own area's rows for modules
--- relevant to their role; Super_Admin bypasses everything.
--- =========================================================================
 
 alter table users enable row level security;
 alter table ers_document enable row level security;
@@ -931,41 +610,25 @@ alter table id_card_process enable row level security;
 alter table notifications enable row level security;
 alter table notification_reads enable row level security;
 
--- helper: current user's role. SECURITY DEFINER so this read doesn't
--- itself depend on the RLS policy below (Supabase's recommended pattern
--- for RLS helper functions) — safer and faster than a plain STABLE
--- function here.
 create or replace function auth_role() returns user_role
 language sql stable security definer set search_path = public as $$
   select role from users where id = auth.uid();
 $$;
 
--- users: can read own row; Super_Admin can read all
 create policy users_self_read on users for select using (
   id = auth.uid() or auth_role() = 'Super_Admin'
 );
 
--- ERS: OPS sees what THEY submitted; Recruitment sees ALL of them (they're
--- the ones who accept/reject every ERS, regardless of which OPS user
--- submitted it); Super_Admin sees everything. Scoped by who created the
--- row (uploaded_by) for OPS, not by area text — area is free-typed on the
--- form, so matching on it is fragile, and since an insert's RETURNING
--- clause is itself subject to the SELECT policy, a mismatch there would
--- make OPS's own just-created row unreadable.
 create policy ers_select on ers_document for select using (
   auth_role() in ('Super_Admin', 'HR_Recruitment') or (auth_role() = 'OPS' and uploaded_by = auth.uid())
 );
 create policy ers_insert on ers_document for insert with check (
   auth_role() in ('OPS', 'Super_Admin')
 );
--- Only Recruitment (and Super_Admin) can change an ERS's status — OPS
--- cannot accept/reject its own submission, only read it back (ers_select
--- above) and create new ones (ers_insert above).
 create policy ers_update on ers_document for update using (
   auth_role() in ('Super_Admin', 'HR_Recruitment')
 );
 
--- Turnover: visible to OPS (their own submissions), ER, Recruitment, Training, Payroll, Super_Admin
 create policy turnover_select on turnover for select using (
   auth_role() in ('Super_Admin', 'HR_ER', 'HR_Recruitment', 'HR_Training', 'HR_Payroll') or
   (auth_role() = 'OPS' and created_by = auth.uid())
@@ -973,15 +636,11 @@ create policy turnover_select on turnover for select using (
 create policy turnover_insert on turnover for insert with check (
   auth_role() in ('OPS', 'Super_Admin')
 );
--- OPS updates their own submissions; HR_ER can process/edit any turnover
 create policy turnover_update on turnover for update using (
   auth_role() in ('Super_Admin', 'HR_ER') or
   (auth_role() = 'OPS' and created_by = auth.uid())
 );
 
--- Interview harian: Recruitment manages (insert/update); Recruitment, ER
--- and Payroll can all read (ER + Payroll's turnover list shows the
--- resulting "Karyawan Baru" from the interview); Super_Admin sees all.
 create policy interview_select on interview_harian for select using (
   auth_role() in ('Super_Admin', 'HR_Recruitment', 'HR_ER', 'HR_Payroll')
 );
@@ -992,11 +651,6 @@ create policy interview_update on interview_harian for update using (
   auth_role() in ('HR_Recruitment', 'Super_Admin')
 );
 
--- Interview candidate pool ("Data Peserta Wawancara"): Recruitment's own
--- reusable talent pool. Nobody can INSERT/UPDATE it directly from the
--- client — every row only ever comes from the
--- interview_harian_sync_candidate_pool trigger above, which runs as the
--- table owner (SECURITY DEFINER) and bypasses RLS on the way in.
 create policy interview_candidates_select on interview_candidates for select using (
   auth_role() in ('Super_Admin', 'HR_Recruitment')
 );
@@ -1004,18 +658,11 @@ create policy interview_candidate_history_select on interview_candidate_history 
   auth_role() in ('Super_Admin', 'HR_Recruitment')
 );
 
--- "Riwayat pengajuan turnover" log: same access as the candidate pool
--- above — read-only for the client, every row comes from the
--- interview_log_turnover_assignment trigger (SECURITY DEFINER).
 alter table interview_turnover_log enable row level security;
 create policy interview_turnover_log_select on interview_turnover_log for select using (
   auth_role() in ('Super_Admin', 'HR_Recruitment')
 );
 
--- ID card: Training manages the queue; Recruitment can also INSERT because
--- "Tandai Hired" in the Recruitment module is what creates the row — and
--- also needs SELECT here, because the app does `insert(...).select()`,
--- which requires the actor to be able to read back the row it just made.
 create policy idcard_select on id_card_process for select using (
   auth_role() in ('Super_Admin', 'HR_Training', 'HR_Recruitment')
 );
@@ -1026,20 +673,11 @@ create policy idcard_update on id_card_process for update using (
   auth_role() in ('HR_Training', 'Super_Admin')
 );
 
--- Notifications: every authenticated user can read the shared activity
--- feed (it's already scoped to non-sensitive summary text). Nobody can
--- INSERT directly from the client — rows only ever come from the trigger
--- functions above, which run as the table owner and bypass RLS.
 create policy notifications_select on notifications for select using (auth.uid() is not null);
 
--- notification_reads: each user can only see/write their own read markers.
 create policy notification_reads_select on notification_reads for select using (user_id = auth.uid());
 create policy notification_reads_insert on notification_reads for insert with check (user_id = auth.uid());
 
--- Convenience view: notifications + whether the CURRENT user has read each
--- one, newest first. This is what the Header component queries directly
--- (`select * from my_notifications limit 20`) instead of doing the
--- left-join/auth.uid() logic in JS.
 create or replace view my_notifications as
 select n.*, (nr.user_id is not null) as is_read
 from notifications n
@@ -1048,10 +686,6 @@ order by n.created_at desc;
 
 grant select on my_notifications to authenticated;
 
--- =========================================================================
--- Storage: one private bucket for ERS PDFs (CV/ERS docs), one for ID card
--- photos. Both private + signed URLs, simple owner-based policy.
--- =========================================================================
 insert into storage.buckets (id, name, public) values ('ers-documents', 'ers-documents', false)
   on conflict (id) do nothing;
 insert into storage.buckets (id, name, public) values ('idcard-photos', 'idcard-photos', false)
@@ -1067,17 +701,6 @@ create policy "Authenticated read idcard-photos" on storage.objects
 create policy "Authenticated upload idcard-photos" on storage.objects
   for insert with check (bucket_id = 'idcard-photos' and auth.uid() is not null);
 
--- =========================================================================
--- API-level grants. Needed if your project has "Automatically expose new
--- tables" turned OFF (Database -> API Settings) — which is the setting
--- Supabase itself recommends. With it off, PostgREST won't let ANY role
--- touch a new table until you grant it explicitly, regardless of RLS.
--- These grants only open the door at the table level; the RLS policies
--- above are what actually decide which rows each role can see/change, so
--- it's safe to run this block either way. Nothing is granted to `anon`
--- since this app has no public/unauthenticated access — every screen
--- requires a logged-in Supabase Auth session.
--- =========================================================================
 grant usage on schema public to authenticated;
 grant select, insert, update, delete on
   users, ers_document, turnover, interview_harian, interview_candidates, interview_candidate_history,
@@ -1085,24 +708,9 @@ grant select, insert, update, delete on
   to authenticated;
 grant execute on function mark_all_notifications_read() to authenticated;
 
--- =========================================================================
--- Realtime: let the Header bell update live (new notification pops in
--- without a page refresh) instead of only refreshing on next page load.
--- Safe to re-run — ignores the error if the table is already added.
--- =========================================================================
 do $$
 begin
   execute 'alter publication supabase_realtime add table notifications';
 exception when others then
   null;
 end $$;
-
--- =========================================================================
--- Seed: master jabatan list is enforced in the frontend (fixed list in
--- src/lib/constants.js) rather than a lookup table, per project scope.
--- Create your first users through Supabase Auth, then insert matching
--- rows into `users` with the right role, e.g.:
---
---   insert into users (id, area_penempatan, name, email, role)
---   values ('<auth-user-uuid>', 'Kantor Pusat', 'Nama User', 'user@dpi.co.id', 'OPS');
--- =========================================================================

@@ -176,7 +176,7 @@ export async function printIdCard(record) {
 
   const win = window.open("", "_blank", "width=480,height=760");
   if (!win) {
-    throw new Error("Popup diblokir browser -- izinkan popup untuk situs ini agar bisa mencetak ID Card.");
+    throw new Error("Popup diblokir browser. izinkan popup untuk situs ini agar bisa mencetak ID Card.");
   }
   const safeName = String(record.nama_karyawan || "ID Card").replace(/</g, "");
   win.document.write(`<!DOCTYPE html>

@@ -64,10 +64,7 @@ export default function InterviewForm() {
       <Card className="p-6 max-w-4xl">
         <h1 className="text-lg font-bold text-ink-900 mb-1">Form Interview Harian</h1>
         <p className="text-sm text-ink-500 mb-5">
-          Interview bisa dilakukan kapan saja, tidak perlu terkait turnover tertentu -- kandidat baru diajukan ke
-          turnover yang sesuai belakangan lewat layar Turnover. Nilai penilaian dan hasil interview diisi belakangan
-          lewat aksi pensil pada Daftar Interview -- kandidat dengan hasil Recommended/Considered otomatis muncul di
-          Data Peserta Wawancara.
+          Interview dapat dilakukan tanpa turnover tertentu. Kandidat diajukan ke turnover melalui layar Turnover. Penilaian dan hasil interview diisi kemudian. Kandidat Recommended/Considered otomatis masuk Data Peserta Wawancara.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-6">

@@ -253,8 +253,8 @@ export default function RecruitmentTurnoverList() {
                   />
                   <p className="text-[11px] text-ink-300 mt-1">
                     {isClosed
-                      ? "Turnover ini sudah Terpilih (selesai) -- status tidak bisa diubah lagi."
-                      : '"Terpilih" otomatis ter-set saat kandidat ditandai Hired -- tidak perlu dipilih manual.'}
+                      ? "Turnover ini sudah Terpilih (selesai). status tidak bisa diubah lagi."
+                      : '"Terpilih" otomatis ter-set saat kandidat ditandai Hired. tidak perlu dipilih manual.'}
                   </p>
                 </div>
                 <div>

@@ -181,8 +181,7 @@ export default function InterviewList() {
             {(active.hasil_interview === "Recommended" || active.hasil_interview === "Considered") && !active.turnover_id && (
               <div className="flex items-center gap-2 text-sm text-ink-700 bg-surface-panel border border-surface-border px-3 py-2.5">
                 <Info size={16} className="text-primary shrink-0" />
-                Kandidat ini otomatis tampil di "Data Peserta Wawancara" -- bisa diajukan ke turnover manapun yang
-                cocok dari layar Turnover.
+                Kandidat otomatis tampil di Data Peserta Wawancara dan dapat diajukan ke turnover yang sesuai melalui layar Turnover.
               </div>
             )}
           </div>
@@ -239,9 +238,9 @@ export default function InterviewList() {
                 <span className="text-xs text-ink-500">(otomatis dari total nilai)</span>
               </div>
               <p className="text-[11px] text-ink-300 mt-1">
-                <b>Recommended</b> &ge;350, <b>Considered</b> 250-349, <b>Not Recommended</b> &lt;250 -- otomatis
+                <b>Recommended</b> &ge;350, <b>Considered</b> 250-349, <b>Not Recommended</b> &lt;250. otomatis
                 mengikuti skala penilaian di atas, tidak dipilih manual. Recommended/Considered otomatis masuk ke
-                "Data Peserta Wawancara".
+                Data Peserta Wawancara.
               </p>
             </div>
             <div>
